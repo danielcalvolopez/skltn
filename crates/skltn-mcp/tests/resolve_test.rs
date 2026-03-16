@@ -1,4 +1,5 @@
 use skltn_core::backend::rust::RustBackend;
+use skltn_core::backend::typescript::TypeScriptBackend;
 use skltn_mcp::resolve::{resolve_symbol, ResolveResult};
 
 #[test]
@@ -192,5 +193,82 @@ pub struct Config {
             assert!(source_text.contains("pub struct Config"));
         }
         other => panic!("Expected Found with attributes, got: {other:?}"),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// TypeScript symbol resolution tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_resolve_ts_interface() {
+    let source = r#"
+interface UserProfile {
+    name: string;
+    age: number;
+}
+"#;
+    let backend = TypeScriptBackend;
+    let result = resolve_symbol(source, "UserProfile", None, &backend);
+    match result {
+        ResolveResult::Found { match_info, .. } => {
+            assert_eq!(match_info.name, "UserProfile");
+        }
+        other => panic!("Expected Found for TS interface, got: {other:?}"),
+    }
+}
+
+#[test]
+fn test_resolve_ts_type_alias() {
+    let source = r#"
+type Color = "red" | "green" | "blue";
+"#;
+    let backend = TypeScriptBackend;
+    let result = resolve_symbol(source, "Color", None, &backend);
+    match result {
+        ResolveResult::Found { match_info, .. } => {
+            assert_eq!(match_info.name, "Color");
+        }
+        other => panic!("Expected Found for TS type alias, got: {other:?}"),
+    }
+}
+
+#[test]
+fn test_resolve_ts_enum() {
+    let source = r#"
+enum Direction {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+"#;
+    let backend = TypeScriptBackend;
+    let result = resolve_symbol(source, "Direction", None, &backend);
+    match result {
+        ResolveResult::Found { match_info, .. } => {
+            assert_eq!(match_info.name, "Direction");
+        }
+        other => panic!("Expected Found for TS enum, got: {other:?}"),
+    }
+}
+
+#[test]
+fn test_resolve_ts_method_in_class() {
+    let source = r#"
+class UserService {
+    getUser(id: string): User {
+        return db.find(id);
+    }
+}
+"#;
+    let backend = TypeScriptBackend;
+    let result = resolve_symbol(source, "getUser", None, &backend);
+    match result {
+        ResolveResult::Found { match_info, .. } => {
+            assert_eq!(match_info.name, "getUser");
+            assert_eq!(match_info.parent_context.as_deref(), Some("class UserService"));
+        }
+        other => panic!("Expected Found, got: {other:?}"),
     }
 }
