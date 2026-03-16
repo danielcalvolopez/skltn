@@ -1,0 +1,19 @@
+---
+source: crates/skltn-core/tests/javascript_backend.rs
+expression: result
+---
+import { readFileSync } from 'fs';
+import path from 'path';
+
+/**
+ * Reads and parses a JSON configuration file.
+ * @param {string} filePath - Path to the config file.
+ * @returns {Object} The parsed configuration.
+ */
+export function readConfig(filePath) {
+    throw new Error("not implemented") // [skltn: 9 lines hidden]
+}
+
+function validateEntry(entry) {
+    throw new Error("not implemented") // [skltn: 9 lines hidden]
+}

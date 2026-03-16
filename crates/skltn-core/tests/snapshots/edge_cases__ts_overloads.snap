@@ -1,0 +1,17 @@
+---
+source: crates/skltn-core/tests/edge_cases.rs
+expression: result
+---
+// Function overloads — signatures should be preserved, implementation pruned
+export function format(value: string): string;
+export function format(value: number): string;
+export function format(value: Date): string;
+export function format(value: string | number | Date): string {
+    throw new Error("not implemented") // [skltn: 9 lines hidden]
+}
+
+export function parse(input: string, type: 'number'): number;
+export function parse(input: string, type: 'boolean'): boolean;
+export function parse(input: string, type: 'number' | 'boolean'): number | boolean {
+    throw new Error("not implemented") // [skltn: 8 lines hidden]
+}

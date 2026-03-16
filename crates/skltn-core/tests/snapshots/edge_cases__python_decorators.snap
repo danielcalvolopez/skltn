@@ -1,0 +1,32 @@
+---
+source: crates/skltn-core/tests/edge_cases.rs
+expression: result
+---
+import functools
+import time
+
+
+def timer(func):
+    
+    """Decorator that times function execution."""
+    pass # [skltn: 9 lines hidden]
+
+
+def retry(max_attempts: int = 3):
+    
+    """Decorator factory for retry logic."""
+    pass # [skltn: 13 lines hidden]
+
+
+@timer
+def slow_operation(data: list) -> list:
+    
+    """A slow operation that benefits from timing."""
+    pass # [skltn: 7 lines hidden]
+
+
+@retry(max_attempts=5)
+def fetch_with_retry(url: str) -> dict:
+    
+    """Fetch data from URL with automatic retries."""
+    pass # [skltn: 4 lines hidden]

@@ -1,0 +1,24 @@
+export interface User {
+    id: number;
+    name: string;
+    email: string;
+    role: UserRole;
+    metadata?: Record<string, unknown>;
+}
+
+export type UserRole = 'admin' | 'editor' | 'viewer';
+
+export type Result<T, E = Error> =
+    | { ok: true; value: T }
+    | { ok: false; error: E };
+
+export interface Repository<T> {
+    findById(id: number): Promise<T | null>;
+    findAll(): Promise<T[]>;
+    create(item: Omit<T, 'id'>): Promise<T>;
+    update(id: number, item: Partial<T>): Promise<T>;
+    delete(id: number): Promise<void>;
+}
+
+export const DEFAULT_PAGE_SIZE = 25;
+export const MAX_PAGE_SIZE = 100;

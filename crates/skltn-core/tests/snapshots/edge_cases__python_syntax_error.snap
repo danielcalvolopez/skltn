@@ -1,0 +1,23 @@
+---
+source: crates/skltn-core/tests/edge_cases.rs
+expression: result
+---
+def valid_function(x: int) -> int:
+    
+    """A valid function."""
+    pass # [skltn: 2 lines hidden]
+
+
+def another_valid(s: str) -> str:
+    
+    pass # [skltn: 1 lines hidden]
+
+
+# This has a syntax error
+def broken(x: int ->:
+    return x
+
+
+def after_error(y: int) -> int:
+    
+    pass # [skltn: 1 lines hidden]

@@ -1,0 +1,26 @@
+---
+source: crates/skltn-core/tests/edge_cases.rs
+expression: result
+---
+function Injectable() {
+    throw new Error("not implemented") // [skltn: 5 lines hidden]
+}
+
+function Log(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+    throw new Error("not implemented") // [skltn: 10 lines hidden]
+}
+
+@Injectable()
+export class OrderService {
+    private orders: Map<string, Order> = new Map();
+
+    @Log
+    createOrder(items: OrderItem[]): Order {
+        throw new Error("not implemented") // [skltn: 10 lines hidden]
+    }
+
+    @Log
+    cancelOrder(orderId: string): boolean {
+        throw new Error("not implemented") // [skltn: 6 lines hidden]
+    }
+}

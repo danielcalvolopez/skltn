@@ -1,0 +1,18 @@
+---
+source: crates/skltn-core/tests/typescript_backend.rs
+expression: result
+---
+import { User, Result } from './types';
+
+// Expression-bodied (should NOT be pruned)
+export const isAdmin = (user: User): boolean => user.role === 'admin';
+export const getUserName = (user: User): string => user.name;
+
+// Block-bodied (should be pruned)
+export const validateUser = (user: User): Result<User> => {
+    throw new Error("not implemented") // [skltn: 9 lines hidden]
+};
+
+export const fetchUsers = async (page: number = 1): Promise<User[]> => {
+    throw new Error("not implemented") // [skltn: 8 lines hidden]
+};

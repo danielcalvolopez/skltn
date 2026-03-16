@@ -1,0 +1,23 @@
+---
+source: crates/skltn-core/tests/edge_cases.rs
+expression: result
+---
+function log(target, name, descriptor) {
+    throw new Error("not implemented") // [skltn: 10 lines hidden]
+}
+
+class TaskManager {
+    constructor() {
+        throw new Error("not implemented") // [skltn: 3 lines hidden]
+    }
+
+    addTask(task) {
+        throw new Error("not implemented") // [skltn: 8 lines hidden]
+    }
+
+    completeTask(index) {
+        throw new Error("not implemented") // [skltn: 7 lines hidden]
+    }
+}
+
+export { TaskManager };

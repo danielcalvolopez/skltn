@@ -1,0 +1,20 @@
+---
+source: crates/skltn-core/tests/python_backend.rs
+expression: result
+---
+class OuterService:
+    """Service with deeply nested structures."""
+
+    class Config:
+        """Nested configuration."""
+        timeout: int = 30
+        retries: int = 3
+
+    def process(self, data: dict) -> dict:
+        
+        """Process data with error handling."""
+        pass # [skltn: 18 lines hidden]
+
+    def _transform(self, item: dict) -> Optional[dict]:
+        
+        pass # [skltn: 9 lines hidden]

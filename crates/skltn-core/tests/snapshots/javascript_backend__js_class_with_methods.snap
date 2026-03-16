@@ -1,0 +1,36 @@
+---
+source: crates/skltn-core/tests/javascript_backend.rs
+expression: result
+---
+import EventEmitter from 'events';
+
+const DEFAULT_TIMEOUT = 5000;
+
+/**
+ * Manages WebSocket connections with auto-reconnect.
+ */
+export class ConnectionManager extends EventEmitter {
+    /**
+     * @param {string} url - The WebSocket URL.
+     * @param {Object} options - Connection options.
+     */
+    constructor(url, options = {}) {
+        throw new Error("not implemented") // [skltn: 7 lines hidden]
+    }
+
+    /**
+     * Establish a connection to the server.
+     * @returns {Promise<void>}
+     */
+    async connect() {
+        throw new Error("not implemented") // [skltn: 16 lines hidden]
+    }
+
+    /**
+     * Send a message through the connection.
+     * @param {Object} data - The data to send.
+     */
+    send(data) {
+        throw new Error("not implemented") // [skltn: 8 lines hidden]
+    }
+}

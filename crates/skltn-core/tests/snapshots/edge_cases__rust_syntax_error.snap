@@ -1,0 +1,20 @@
+---
+source: crates/skltn-core/tests/edge_cases.rs
+expression: result
+---
+pub fn valid_function(x: i32) -> i32 {
+    todo!() // [skltn: 3 lines hidden]
+}
+
+pub fn another_valid(s: &str) -> String {
+    todo!() // [skltn: 3 lines hidden]
+}
+
+// This line has a syntax error
+pub fn broken(x: i32 -> {
+    x
+}
+
+pub fn after_error(y: i32) -> i32 {
+    todo!() // [skltn: 3 lines hidden]
+}

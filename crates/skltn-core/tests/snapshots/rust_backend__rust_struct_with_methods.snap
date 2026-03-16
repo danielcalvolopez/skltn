@@ -1,0 +1,35 @@
+---
+source: crates/skltn-core/tests/rust_backend.rs
+expression: result
+---
+use std::fmt;
+
+/// A token counter that tracks usage statistics.
+pub struct TokenCounter {
+    pub raw_count: u64,
+    pub skeleton_count: u64,
+    compression_ratio: f64,
+}
+
+impl TokenCounter {
+    /// Creates a new TokenCounter with zero counts.
+    pub fn new() -> Self {
+        todo!() // [skltn: 7 lines hidden]
+    }
+
+    /// Records a raw token count and updates the ratio.
+    pub fn record(&mut self, raw: u64, skeleton: u64) {
+        todo!() // [skltn: 8 lines hidden]
+    }
+
+    /// Returns the compression ratio as a percentage.
+    pub fn ratio(&self) -> f64 {
+        todo!() // [skltn: 3 lines hidden]
+    }
+}
+
+impl fmt::Display for TokenCounter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        todo!() // [skltn: 9 lines hidden]
+    }
+}
