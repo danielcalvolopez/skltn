@@ -15,11 +15,11 @@
 ---
 
 ## Current Phase: Phase 2 — MCP Server
-**Status:** In Progress
+**Status:** Complete — All 13 tasks done, ready to merge
 **Branch:** `feature/phase2-mcp-server` (worktree at `.worktrees/phase2-mcp-server`)
 **Plan:** `docs/superpowers/plans/2026-03-16-phase2-mcp-server.md`
 **Spec:** `docs/superpowers/specs/2026-03-16-phase2-mcp-server-design.md`
-**Tests:** 38 passing, 0 clippy warnings
+**Tests:** 46 skltn-mcp tests + 41 skltn-core tests = 87 total, 0 clippy warnings
 
 ---
 
@@ -53,14 +53,14 @@
 ### Chunk 5: MCP Server Wiring (rmcp Integration)
 | Task | Description | Status |
 |------|-------------|--------|
-| 10 | Wire Up SkltnServer with rmcp Tool Registration | In Progress |
-| 11 | Add MCP Integration Tests | Pending |
+| 10 | Wire Up SkltnServer with rmcp Tool Registration | Complete |
+| 11 | Add MCP Integration Tests | Complete |
 
 ### Chunk 6: Final Validation and Cleanup
 | Task | Description | Status |
 |------|-------------|--------|
-| 12 | Run Full Test Suite and Verify Build | Pending |
-| 13 | Final Full Validation | Pending |
+| 12 | Run Full Test Suite and Verify Build | Complete |
+| 13 | Final Full Validation | Complete |
 
 ---
 
@@ -128,4 +128,4 @@
 | Date | Session | Tasks Completed | Notes |
 |------|---------|----------------|-------|
 | 2026-03-16 | 1 | All 21 tasks (Phase 1) | Full Phase 1 implementation. Merged to main. Ready for Phase 2. |
-| 2026-03-16 | 2 | Tasks 1-9 (Phase 2, Chunks 1-4) | Crate scaffolding, McpError, Budget Guard, path security, symbol resolution (Rust+TS), list_repo_structure, read_skeleton, read_full_symbol. 38 tests passing. Next: Task 10 (rmcp server wiring). |
+| 2026-03-16 | 2 | All 13 tasks (Phase 2) | Full Phase 2 implementation. skltn-mcp crate with 3 MCP tools (list_repo_structure, read_skeleton, read_full_symbol), Budget Guard, symbol resolution, path security, rmcp server wiring. 87 workspace tests, 0 clippy warnings. Ready to merge. |
