@@ -6,8 +6,8 @@
 ---
 
 ## Current Phase: Phase 1 — Skeleton Engine
-**Status:** Not Started
-**Branch:** (not yet created)
+**Status:** In Progress — Chunk 2 Complete
+**Branch:** `feature/phase1-skeleton-engine`
 **Plan:** `docs/superpowers/plans/2026-03-16-phase1-skeleton-engine.md`
 **Spec:** `docs/superpowers/specs/2026-03-16-phase1-skeleton-engine-design.md`
 
@@ -18,18 +18,19 @@
 ### Chunk 1: Project Scaffolding, Trait, Error Types, and Options
 | Task | Description | Status | Notes |
 |------|-------------|--------|-------|
-| 1 | Initialize Cargo Workspace | Not Started | |
-| 2 | Define Error Types | Not Started | |
-| 3 | Define SkeletonOptions | Not Started | |
-| 4 | Define LanguageBackend Trait | Not Started | |
+| 1 | Initialize Cargo Workspace | Complete | |
+| 2 | Define Error Types | Complete | |
+| 3 | Define SkeletonOptions | Complete | |
+| 4 | Define LanguageBackend Trait | Complete | |
 
 ### Chunk 2: Rust Backend + Engine Core
 | Task | Description | Status | Notes |
 |------|-------------|--------|-------|
-| 5 | Create Rust Test Fixtures | Not Started | |
-| 6 | Implement RustBackend | Not Started | |
-| 7 | Implement SkeletonEngine | Not Started | |
-| 8 | Rust Snapshot Tests | Not Started | |
+| 5 | Create Rust Test Fixtures | Complete | 4 fixtures: simple_function, struct_with_methods, enums_and_constants, doc_comments |
+| 6 | Implement RustBackend | Complete | backend/rust.rs with all trait methods |
+| 7 | Implement SkeletonEngine | Complete | byte-range replacement strategy; fixed non-structural node recursion |
+| 8 | Create Shared Test Utilities | Complete | tests/common/mod.rs with assert_valid_syntax |
+| 9 | Rust Snapshot Tests | Complete | 7 tests (4 snapshot + 3 valid-syntax), all passing |
 
 ### Chunk 3: Python Backend
 | Task | Description | Status | Notes |
@@ -65,11 +66,12 @@
 ## Blockers & Decisions
 | Date | Item | Resolution |
 |------|------|------------|
-| (none yet) | | |
+| 2026-03-16 | Engine skipped non-structural wrapper nodes (e.g., `declaration_list`) | Fixed: recurse into non-structural nodes to traverse wrapper containers; only skip recursion after recording a leaf body replacement |
 
 ---
 
 ## Session Log
 | Date | Session | Tasks Completed | Notes |
 |------|---------|----------------|-------|
-| 2026-03-16 | 1 | (starting) | Initial setup, creating worktree |
+| 2026-03-16 | 1 | Tasks 1-4 (Chunk 1) | Workspace, error types, options, LanguageBackend trait |
+| 2026-03-16 | 2 | Tasks 5-9 (Chunk 2) | Fixtures, RustBackend, SkeletonEngine, test utilities, 7 passing snapshot tests |
