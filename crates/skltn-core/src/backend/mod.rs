@@ -2,6 +2,7 @@ pub mod js_common;
 pub mod javascript;
 pub mod python;
 pub mod rust;
+pub mod typescript;
 
 use tree_sitter::{Language, Node};
 
