@@ -49,9 +49,11 @@ The project is delivered in 4 independent phases, each producing a standalone, t
 
 ### C. Observability Layer (Phase 3)
 
-**Requirement:** Intercept Anthropic API responses and log `input_tokens` and `cache_read_input_tokens`.
+**Requirement:** Intercept Anthropic API responses and log `input_tokens`, `output_tokens`, `cache_creation_input_tokens`, and `cache_read_input_tokens`.
 
-**Requirement:** Create a `CostTracker` struct that calculates savings.
+**Requirement:** Create a `CostTracker` struct that calculates actual cost per request and tracks cumulative session cost.
+
+> **PRD Deviation:** The original PRD specified "calculates savings." During Phase 3 design, this was narrowed to actual cost tracking only. Calculating savings would require knowing what the request *would have looked like* without skeletonization — a counterfactual the proxy cannot observe. The proxy reports what actually happened.
 
 ### D. Real-Time Token HUD (Phase 4)
 

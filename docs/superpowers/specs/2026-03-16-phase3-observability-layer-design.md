@@ -135,7 +135,9 @@ The `/ws` route is explicitly registered for WebSocket connections. Everything e
 
 ### Model Extraction
 
-Before forwarding `POST /v1/messages` requests, the proxy deserializes just enough of the request body to extract the `model` and `stream` fields. These are needed for pricing calculation and to determine the response parsing mode. The original bytes are forwarded unchanged. For non-message endpoints, no body parsing occurs.
+Before forwarding `POST /v1/messages` requests, the proxy deserializes just enough of the request body to extract the `model` field. This is needed for pricing calculation. The original bytes are forwarded unchanged. For non-message endpoints, no body parsing occurs.
+
+If request body parsing fails (malformed JSON, missing `model` field), the request is still forwarded to Anthropic (transparent pass-through is never broken). No `UsageRecord` is generated for that request, and a `tracing::warn!` is emitted. Anthropic will return its own error response for truly malformed requests.
 
 ### What the Proxy Does NOT Do
 
@@ -157,11 +159,11 @@ The client is initialized once in `main.rs` and shared via `axum::State`:
 
 ## Response Skimming (`skim.rs`)
 
-The skimmer extracts usage data from Anthropic API responses. Two distinct code paths based on the response format.
+The skimmer extracts usage data from Anthropic API responses. Two distinct code paths based on the **response `Content-Type` header**, which is the authoritative signal for determining the response format. The `stream` field from the request body is not used for this decision — the response header reflects what actually happened.
 
 ### Non-Streaming Path
 
-When the response `Content-Type` is `application/json` (client sent `"stream": false`):
+When the response `Content-Type` is `application/json`:
 
 1. Buffer the full response body via `response.bytes().await`
 2. Parse as JSON, extract the `usage` object from the top level
@@ -185,7 +187,7 @@ The response body is a single JSON object with `usage` at the top level:
 
 ### Streaming Path
 
-When the response `Content-Type` is `text/event-stream` (client sent `"stream": true`):
+When the response `Content-Type` is `text/event-stream`:
 
 The response is a series of SSE events. Usage data is split across two events:
 
@@ -212,14 +214,21 @@ data: {"type":"message_stop"}
 3. For each chunk, the background task:
    - Sends a **clone** of the `Bytes` to the channel (for immediate forwarding to the client)
    - Appends to an internal `String` buffer for SSE event parsing
-   - When a complete SSE event boundary (`\n\n`) is detected, parses the event
+   - Scans the buffer for a complete SSE event boundary (`\n\n`). When found, everything up to and including the boundary is parsed as a complete SSE event, and that portion is removed from the buffer. Any trailing bytes after the boundary remain in the buffer as the start of the next event. This handles events split across chunk boundaries correctly — partial data simply accumulates until the next `\n\n` arrives.
    - Extracts usage fields from `message_start` and `message_delta` events into a `partial_record` held in local scope
 4. The axum response body wraps the channel receiver via `Body::from_stream()` — chunks flow to the client immediately as they arrive
 5. When the stream ends (or `message_stop` is received), the background task merges the partial fields into a final `UsageRecord` and sends it to the `CostTracker`
 
+**Mid-stream error handling:**
+
+If the upstream connection drops or errors mid-stream (before `message_stop` is received):
+- The forwarding channel is closed, so the client sees the stream end (matching what would happen without the proxy)
+- If a `message_start` was received but no `message_delta`, the partial record is **discarded** — no `UsageRecord` is generated. Incomplete data would skew cost tracking, and the API call likely failed anyway.
+- A `tracing::warn!` is emitted noting the incomplete stream
+
 **Key properties:**
 - Zero added latency — chunks forwarded as received, parsing happens on cloned data
-- Memory-safe — the buffer is cleared after each event boundary, preventing growth during long conversations
+- Memory-safe — parsed events are removed from the buffer, only unparsed trailing bytes accumulate (typically a few hundred bytes at most)
 - Structurally robust — uses SSE event boundary parsing (`\n\n`), not substring scanning on raw bytes
 
 ---
@@ -267,6 +276,7 @@ pub struct CostTracker {
 - **Directory creation:** `~/.skltn/` created on startup if missing
 - **Atomic appends:** One line per record, each line is a complete JSON object. Even if the proxy crashes mid-write, previous records remain intact.
 - **Non-blocking:** The HTTP response path never waits on disk I/O. Records are sent to the writer via the async `mpsc` channel.
+- **Graceful shutdown:** On `SIGINT`/`SIGTERM`, the writer task drains any remaining records from the `mpsc` channel before exiting. This prevents the last few records from being lost during clean shutdown.
 
 ---
 
@@ -284,14 +294,34 @@ pub struct ModelRates {
     pub cache_read_per_mtok: f64,
 }
 
+/// Rates as of 2026-03-16. Verify against https://docs.anthropic.com/en/docs/about-claude/models
+/// before implementation — prices may have changed.
 pub fn get_rates(model: &str) -> ModelRates {
     match model {
-        m if m.contains("claude-opus-4") => ModelRates { /* ... */ },
-        m if m.contains("claude-sonnet-4") => ModelRates { /* ... */ },
-        m if m.contains("claude-haiku-4") => ModelRates { /* ... */ },
-        m if m.contains("claude-3-7-sonnet") => ModelRates { /* ... */ },
-        m if m.contains("claude-3-5-sonnet") => ModelRates { /* ... */ },
-        m if m.contains("claude-3-5-haiku") => ModelRates { /* ... */ },
+        m if m.contains("claude-opus-4") => ModelRates {
+            input_per_mtok: 15.00, output_per_mtok: 75.00,
+            cache_write_per_mtok: 18.75, cache_read_per_mtok: 1.50,
+        },
+        m if m.contains("claude-sonnet-4") => ModelRates {
+            input_per_mtok: 3.00, output_per_mtok: 15.00,
+            cache_write_per_mtok: 3.75, cache_read_per_mtok: 0.30,
+        },
+        m if m.contains("claude-haiku-4") => ModelRates {
+            input_per_mtok: 0.80, output_per_mtok: 4.00,
+            cache_write_per_mtok: 1.00, cache_read_per_mtok: 0.08,
+        },
+        m if m.contains("claude-3-7-sonnet") => ModelRates {
+            input_per_mtok: 3.00, output_per_mtok: 15.00,
+            cache_write_per_mtok: 3.75, cache_read_per_mtok: 0.30,
+        },
+        m if m.contains("claude-3-5-sonnet") => ModelRates {
+            input_per_mtok: 3.00, output_per_mtok: 15.00,
+            cache_write_per_mtok: 3.75, cache_read_per_mtok: 0.30,
+        },
+        m if m.contains("claude-3-5-haiku") => ModelRates {
+            input_per_mtok: 0.80, output_per_mtok: 4.00,
+            cache_write_per_mtok: 1.00, cache_read_per_mtok: 0.08,
+        },
         _ => {
             tracing::warn!("Unknown model '{}', cost tracking will show $0.00", model);
             ModelRates::zero()
@@ -335,8 +365,10 @@ Cost is calculated once when the `UsageRecord` is created, stored in `cost_usd`,
 
 1. Client connects to `ws://localhost:PORT/ws`
 2. **Replay:** Server sends all `UsageRecord`s from the current in-memory session buffer (`CostTracker.records`). This lets a HUD that connects mid-session catch up instantly.
-3. **Live:** Server subscribes to the `broadcast::Sender<UsageRecord>` and forwards each new record as it arrives
+3. **Live:** Server forwards each new record from the `broadcast` channel as it arrives
 4. On disconnect, the subscription is dropped. No cleanup needed — `broadcast` handles this.
+
+**Critical invariant — replay-to-live handoff:** The `records.clone()` and `broadcast.subscribe()` calls must happen inside the same `Mutex` lock acquisition. This guarantees no gap between the replayed history and the live stream. Because `CostTracker::record()` also acquires the lock to both push to `records` and send on `broadcast`, a record is either in the cloned vector (if it was added before the lock) or will be received via the broadcast subscription (if it's added after). Moving the `subscribe()` call outside the lock would introduce a race where records could be missed.
 
 ### Implementation
 
