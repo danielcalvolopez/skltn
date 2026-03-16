@@ -1,3 +1,5 @@
+pub mod rust;
+
 use tree_sitter::{Language, Node};
 
 /// Trait that each supported language must implement.
