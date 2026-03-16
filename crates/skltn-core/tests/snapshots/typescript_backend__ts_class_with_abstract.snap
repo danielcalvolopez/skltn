@@ -1,0 +1,36 @@
+---
+source: crates/skltn-core/tests/typescript_backend.rs
+expression: result
+---
+export abstract class BaseService<T> {
+    protected cache: Map<number, T> = new Map();
+
+    abstract findById(id: number): Promise<T | null>;
+    abstract create(data: Omit<T, 'id'>): Promise<T>;
+
+    async findCached(id: number): Promise<T | null> {
+        throw new Error("not implemented") // [skltn: 10 lines hidden]
+    }
+
+    clearCache(): void {
+        throw new Error("not implemented") // [skltn: 4 lines hidden]
+    }
+}
+
+export class UserServiceImpl extends BaseService<User> {
+    constructor(private readonly db: Database) {
+        throw new Error("not implemented") // [skltn: 3 lines hidden]
+    }
+
+    async findById(id: number): Promise<User | null> {
+        throw new Error("not implemented") // [skltn: 5 lines hidden]
+    }
+
+    async create(data: Omit<User, 'id'>): Promise<User> {
+        throw new Error("not implemented") // [skltn: 7 lines hidden]
+    }
+
+    private mapRow(row: any): User {
+        throw new Error("not implemented") // [skltn: 8 lines hidden]
+    }
+}

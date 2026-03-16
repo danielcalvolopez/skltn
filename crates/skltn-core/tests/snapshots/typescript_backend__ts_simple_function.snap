@@ -1,0 +1,28 @@
+---
+source: crates/skltn-core/tests/typescript_backend.rs
+expression: result
+---
+import { readFileSync } from 'fs';
+import path from 'path';
+
+interface Config {
+    name: string;
+    version: string;
+    entries: ConfigEntry[];
+}
+
+interface ConfigEntry {
+    id: number;
+    label: string;
+    enabled: boolean;
+}
+
+type ConfigValidator = (config: Config) => boolean;
+
+export function readConfig(filePath: string): Config {
+    throw new Error("not implemented") // [skltn: 9 lines hidden]
+}
+
+function validateConfig(config: Config): boolean {
+    throw new Error("not implemented") // [skltn: 9 lines hidden]
+}

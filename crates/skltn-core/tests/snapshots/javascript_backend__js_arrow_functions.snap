@@ -1,0 +1,17 @@
+---
+source: crates/skltn-core/tests/javascript_backend.rs
+expression: result
+---
+// Expression-bodied arrow functions (should NOT be pruned)
+export const double = (x) => x * 2;
+export const greet = (name) => `Hello, ${name}!`;
+const identity = x => x;
+
+// Block-bodied arrow functions (should be pruned)
+export const processItems = (items) => {
+    throw new Error("not implemented") // [skltn: 14 lines hidden]
+};
+
+const fetchData = async (url) => {
+    throw new Error("not implemented") // [skltn: 8 lines hidden]
+};
