@@ -16,6 +16,8 @@ Implementation Plans: Mark specific tasks as complete in the corresponding file 
 
 PROGRESS.md: After EVERY task completion, blocker, or significant decision, update PROGRESS.md with the new status. This is the primary file for resuming work across conversations. Mark tasks as "Complete", "In Progress", or "Blocked" and add notes. Update the Session Log section at the bottom with a summary of what was done.
 
+Context Window Management: At approximately 85% context usage, STOP current work immediately and prepare a handover. Update PROGRESS.md with: (1) exactly what was just completed, (2) what task/step is next, (3) any in-flight state or gotchas the next session needs to know. This ensures seamless continuation in a new conversation.
+
 Rust Style Guide:
 
 Use idiomatic Rust; follow clippy suggestions.
