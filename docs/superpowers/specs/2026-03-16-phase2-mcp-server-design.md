@@ -97,7 +97,7 @@ tree-sitter parsing and `tiktoken-rs` token counting are CPU-bound, synchronous 
 1. Resolve `path` relative to repo root (with path security check — see Path Security section)
 2. Walk the directory using the `ignore` crate (respects `.gitignore`)
 3. Filter to files with supported extensions (`.rs`, `.py`, `.ts`, `.js`)
-4. Show directories for structural context, even if they contain no supported files at the current depth
+4. Show directories for structural context. Directories that contain no supported files (recursively) are pruned from the output to avoid confusing empty entries
 5. If `max_depth` is provided, limit directory traversal depth accordingly
 6. Return a tree-style listing with metadata per file
 
@@ -189,7 +189,7 @@ pub struct SkeletonOptions {
 
 The Budget Guard lives in `budget.rs`. It is a simple gate function:
 
-- **Tokenizer model:** `cl100k_base` — used by Claude-family models, close enough for budget decisions (±5% margin is acceptable for a threshold check)
+- **Tokenizer model:** `cl100k_base` — a widely available BPE tokenizer that provides a reasonable approximation for budget decisions (±5% margin is acceptable for a threshold check)
 - **Threshold:** `TOKEN_THRESHOLD = 2_000` — a constant, not configurable via tool parameters or CLI flags
 - **Token counts are always real** — both the original file and the output are counted via `tiktoken-rs`, never estimated
 
@@ -230,7 +230,8 @@ pub fn should_skeletonize(source: &str, tokenizer: &CoreBPE) -> BudgetDecision {
 1. Resolve path and read file (same not-found / unsupported handling as `read_skeleton`)
 2. Parse the file with tree-sitter via `skltn-core`'s language backend
 3. Walk the AST using the symbol resolution algorithm (see Symbol Resolution section)
-4. Handle results:
+4. For successful matches, run `tiktoken-rs` token count on the extracted source text for the metadata header
+5. Handle results:
 
 **Single match → return full source:**
 ```
@@ -274,7 +275,9 @@ Symbol 'foo' not found in src/engine.rs
 
 ### What "Full Symbol" Returns
 
-The complete source text from the node's start byte to end byte — signature, body, doc comments, decorators/attributes. Everything. The AI gets the exact bytes from the original file, no transformation.
+The complete source text from the node's start byte to end byte — signature, body, and everything in between. The AI gets the exact bytes from the original file, no transformation.
+
+**Doc comments and decorators:** tree-sitter often places doc comments and decorators/attributes as *sibling* nodes preceding the function node, not as children. The symbol resolver must look back at preceding siblings to include these in the extracted range. The extraction range starts at the first preceding doc comment or decorator, and ends at the node's end byte.
 
 ---
 
@@ -288,8 +291,8 @@ The complete source text from the node's start byte to end byte — signature, b
    - When exiting, pop it
    - The top of the stack provides `parent_context` for any match found
 3. Collect all **named nodes** that match the requested symbol. Two categories:
-   - **Structural nodes** — where `backend.is_structural_node()` returns `true` AND the node has a name child (identifier). This covers functions, methods, classes, impl blocks.
-   - **Data nodes** — structs, enums, interfaces, type aliases, traits, constants. These aren't structural in the Phase 1 pruning sense, but are valid lookup targets for `read_full_symbol`.
+   - **Structural nodes** — where `backend.is_structural_node()` returns `true` AND the node has a `name` child field (identifier). This covers functions, methods, classes, impl blocks.
+   - **Data nodes** — structs, enums, interfaces, type aliases, traits, constants. These aren't structural in the Phase 1 pruning sense, but are valid lookup targets for `read_full_symbol`. Data node identification uses **hardcoded tree-sitter node kind strings** in `resolve.rs` (not a trait method on `LanguageBackend`). This keeps the Phase 1 trait focused on skeletonization while allowing `skltn-mcp` to own symbol resolution logic independently. Name extraction uses the tree-sitter `name` field, which is present on all data node types listed below.
 4. Name matching is **exact, case-sensitive**. No fuzzy matching, no substring matching.
 5. Apply disambiguation logic:
 
@@ -326,11 +329,11 @@ All line numbers at the MCP boundary are **1-indexed** (matching IDE and human c
 | Language | Data nodes resolvable by `read_full_symbol` |
 |---|---|
 | Rust | `struct_item`, `enum_item`, `trait_item`, `type_item`, `const_item`, `static_item` |
-| Python | `class_definition` (when no methods — pure data class), `expression_statement` (top-level assignments) |
+| Python | (no additional data nodes — `class_definition` and `function_definition` are already structural nodes) |
 | TypeScript | `interface_declaration`, `type_alias_declaration`, `enum_declaration` |
-| JavaScript | `variable_declaration` (top-level const/let exports) |
+| JavaScript | (no additional data nodes — `class_declaration` and `function_declaration` are already structural nodes) |
 
-> Note: `class_definition` in Python and `class_declaration` in TS/JS are already structural nodes. They appear here as a reminder that they're valid `read_full_symbol` targets — the AI might want to see the entire class, not just a skeleton.
+> Note: Classes in Python/JS/TS are structural nodes in Phase 1 and will already be found via the structural node branch of the algorithm. They do not need separate data node entries. All data node types listed above have a `name` field in their tree-sitter grammar, enabling consistent name extraction.
 
 ---
 
@@ -339,23 +342,36 @@ All line numbers at the MCP boundary are **1-indexed** (matching IDE and human c
 Every tool that accepts a path parameter validates it before use:
 
 ```rust
-pub fn resolve_safe_path(root: &Path, relative: &str) -> Result<PathBuf, SkltnError> {
+pub fn resolve_safe_path(root: &Path, relative: &str) -> Result<PathBuf, McpError> {
     let joined = root.join(relative);
-    let canonical_root = root.canonicalize().map_err(|_| SkltnError::InvalidRoot)?;
-    let canonical_candidate = joined.canonicalize().map_err(|_| SkltnError::FileNotFound)?;
+    let canonical_root = root.canonicalize().map_err(|_| McpError::InvalidRoot)?;
+    let canonical_candidate = joined.canonicalize().map_err(|_| McpError::FileNotFound)?;
 
     if !canonical_candidate.starts_with(&canonical_root) {
-        return Err(SkltnError::PathOutsideRoot);
+        return Err(McpError::PathOutsideRoot);
     }
 
     Ok(canonical_candidate)
 }
 ```
 
+Error types are **`skltn-mcp`-local** (defined in `error.rs`), not modifications to `skltn-core`'s `SkltnError`. Phase 1's error type stays focused on skeletonization errors. Phase 2 defines its own `McpError` enum for MCP-specific failure modes:
+
+```rust
+pub enum McpError {
+    InvalidRoot,
+    FileNotFound,
+    PathOutsideRoot,
+    UnsupportedLanguage,
+    SymbolNotFound,
+    Core(skltn_core::SkltnError),  // Wraps Phase 1 errors
+}
+```
+
 - `canonicalize()` resolves symlinks and `..` segments
 - `starts_with()` check ensures the resolved path is within the repo root
-- `SkltnError::PathOutsideRoot` maps to a content response: `"Path is outside the repository root"` — no information about the actual root path is leaked
-- `SkltnError::FileNotFound` maps to: `"File not found: {path}"` (the relative path as provided, not the resolved path)
+- `McpError::PathOutsideRoot` maps to a content response: `"Path is outside the repository root"` — no information about the actual root path is leaked
+- `McpError::FileNotFound` maps to: `"File not found: {path}"` (the relative path as provided, not the resolved path)
 
 ---
 
