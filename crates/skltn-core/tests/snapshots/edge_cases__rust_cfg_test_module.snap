@@ -1,0 +1,30 @@
+---
+source: crates/skltn-core/tests/edge_cases.rs
+expression: result
+---
+pub struct Calculator;
+
+impl Calculator {
+    pub fn add(&self, a: i32, b: i32) -> i32 {
+        todo!() // [skltn: 4 lines hidden]
+    }
+
+    pub fn multiply(&self, a: i32, b: i32) -> i32 {
+        todo!() // [skltn: 3 lines hidden]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_add() {
+        todo!() // [skltn: 6 lines hidden]
+    }
+
+    #[test]
+    fn test_multiply() {
+        todo!() // [skltn: 6 lines hidden]
+    }
+}

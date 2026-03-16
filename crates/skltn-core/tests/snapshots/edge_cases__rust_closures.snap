@@ -1,0 +1,17 @@
+---
+source: crates/skltn-core/tests/edge_cases.rs
+expression: result
+---
+use std::collections::HashMap;
+
+pub fn process_items(items: &[String]) -> Vec<String> {
+    todo!() // [skltn: 12 lines hidden]
+}
+
+pub fn create_handler() -> impl Fn(i32) -> i32 {
+    todo!() // [skltn: 4 lines hidden]
+}
+
+pub fn sort_by_key(items: &mut [(String, i32)]) {
+    todo!() // [skltn: 4 lines hidden]
+}

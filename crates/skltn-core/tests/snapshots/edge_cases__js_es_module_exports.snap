@@ -1,0 +1,12 @@
+---
+source: crates/skltn-core/tests/edge_cases.rs
+expression: result
+---
+export const API_VERSION = '2.0';
+export const BASE_URL = 'https://api.example.com';
+
+export function createClient(apiKey) {
+    throw new Error("not implemented") // [skltn: 21 lines hidden]
+}
+
+export default createClient;

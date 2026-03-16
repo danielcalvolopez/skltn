@@ -1,0 +1,27 @@
+---
+source: crates/skltn-core/tests/edge_cases.rs
+expression: result
+---
+pub trait Processor {
+    fn process(&self, input: &str) -> String;
+}
+
+pub struct TextProcessor {
+    pub prefix: String,
+}
+
+impl TextProcessor {
+    pub fn new(prefix: &str) -> Self {
+        todo!() // [skltn: 5 lines hidden]
+    }
+
+    pub fn with_suffix(&self, input: &str, suffix: &str) -> String {
+        todo!() // [skltn: 5 lines hidden]
+    }
+}
+
+impl Processor for TextProcessor {
+    fn process(&self, input: &str) -> String {
+        todo!() // [skltn: 5 lines hidden]
+    }
+}

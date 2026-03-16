@@ -2,7 +2,6 @@ use tree_sitter::Node;
 
 /// Shared logic for JavaScript and TypeScript backends.
 /// TS is a superset of JS, so most structural node classification is identical.
-
 /// Is this node a structural node shared by both JS and TS?
 pub fn is_structural_node_common(node: &Node) -> bool {
     matches!(

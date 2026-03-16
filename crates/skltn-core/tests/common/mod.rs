@@ -20,6 +20,7 @@ pub fn has_error_nodes(node: &tree_sitter::Node) -> bool {
 }
 
 /// Assert that the skeleton output is syntactically valid by re-parsing it.
+#[allow(dead_code)]
 pub fn assert_valid_syntax(skeleton: &str, backend: &dyn LanguageBackend) {
     let mut parser = tree_sitter::Parser::new();
     parser.set_language(&backend.language()).unwrap();

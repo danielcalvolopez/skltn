@@ -1,0 +1,27 @@
+---
+source: crates/skltn-core/tests/edge_cases.rs
+expression: result
+---
+from typing import Callable
+
+# Lambdas should be emitted verbatim
+double = lambda x: x * 2
+greet = lambda name: f"Hello, {name}!"
+
+TRANSFORMS: dict[str, Callable] = {
+    "upper": lambda s: s.upper(),
+    "lower": lambda s: s.lower(),
+    "strip": lambda s: s.strip(),
+}
+
+
+def apply_transforms(data: list[str], transform_name: str) -> list[str]:
+    
+    """Apply a named transform to all items."""
+    pass # [skltn: 5 lines hidden]
+
+
+def sort_by_length(items: list[str]) -> list[str]:
+    
+    """Sort items by string length."""
+    pass # [skltn: 2 lines hidden]

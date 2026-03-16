@@ -1,0 +1,28 @@
+---
+source: crates/skltn-core/tests/edge_cases.rs
+expression: result
+---
+class Outer:
+    """Outer class with nested classes."""
+
+    class Inner:
+        """Inner configuration class."""
+        value: int = 42
+
+        def get_value(self) -> int:
+            
+            """Return the configured value."""
+            pass # [skltn: 2 lines hidden]
+
+    class AnotherInner:
+        """Another nested class."""
+
+        def compute(self, x: int) -> int:
+            
+            """Perform computation."""
+            pass # [skltn: 5 lines hidden]
+
+    def use_inner(self) -> int:
+        
+        """Use the inner class."""
+        pass # [skltn: 3 lines hidden]
