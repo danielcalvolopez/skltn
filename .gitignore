@@ -1,0 +1,12 @@
+# Build artifacts
+/target/
+
+# Worktrees
+.worktrees/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
