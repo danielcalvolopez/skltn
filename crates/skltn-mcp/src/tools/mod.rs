@@ -1,4 +1,5 @@
 pub mod list_repo_structure;
+pub mod read_full_symbol;
 pub mod read_skeleton;
 
 use skltn_core::backend::LanguageBackend;
