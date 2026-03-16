@@ -15,15 +15,15 @@ The project is delivered in 4 independent phases, each producing a standalone, t
 
 ## 2. Technical Stack
 
-| Component | Technology |
-|---|---|
-| Language | Rust (latest stable) |
-| Parsing | tree-sitter with per-language grammar crates |
-| Protocol | Model Context Protocol (MCP) via `rmcp` crate |
-| Frontend (HUD) | Tauri (Rust backend + React/TS frontend) |
-| Observability | Anthropic `/v1/messages/count_tokens` API + `tiktoken-rs` |
-| CLI | `clap` (args), `ignore` (filesystem), `is-terminal` (TTY detection) |
-| Testing | `insta` (snapshot testing) |
+| Component      | Technology                                                          |
+| -------------- | ------------------------------------------------------------------- |
+| Language       | Rust (latest stable)                                                |
+| Parsing        | tree-sitter with per-language grammar crates                        |
+| Protocol       | Model Context Protocol (MCP) via `rmcp` crate                       |
+| Frontend (HUD) | Tauri (Rust backend + React/TS frontend)                            |
+| Observability  | `axum` (reverse proxy), `reqwest` (upstream HTTPS), `time` (timestamps) |
+| CLI            | `clap` (args), `ignore` (filesystem), `is-terminal` (TTY detection) |
+| Testing        | `insta` (snapshot testing)                                          |
 
 ---
 
@@ -74,6 +74,7 @@ skltn/
 │   ├── skltn-core/             # Library — Skeleton Engine (Phase 1)
 │   ├── skltn-cli/              # Binary — CLI wrapper (Phase 1)
 │   ├── skltn-mcp/              # Binary — MCP server (Phase 2)
+│   ├── skltn-obs/              # Binary — Observability proxy (Phase 3)
 │   └── skltn-hud/              # Tauri app (Phase 4)
 ├── fixtures/                   # Test fixtures per language
 ├── docs/
@@ -88,8 +89,8 @@ skltn/
 ```
 Phase 1 (Skeleton Engine) ← standalone
 Phase 2 (MCP Server) ← depends on skltn-core
-Phase 3 (Observability) ← depends on skltn-core
-Phase 4 (Tauri HUD) ← depends on Phase 3 observability data
+Phase 3 (Observability) ← standalone (no dependency on skltn-core)
+Phase 4 (Tauri HUD) ← depends on skltn-obs (WebSocket consumer)
 ```
 
 ---
@@ -102,10 +103,10 @@ These decisions were made during the Phase 1 brainstorming session and are bindi
 
 Skeleton output must be syntactically valid in the original language. AI models reason better about valid code. Idiomatic placeholders are used instead of comment markers:
 
-| Language | Placeholder |
-|---|---|
-| Rust | `todo!()` |
-| Python | `pass` |
+| Language   | Placeholder                          |
+| ---------- | ------------------------------------ |
+| Rust       | `todo!()`                            |
+| Python     | `pass`                               |
 | TypeScript | `throw new Error("not implemented")` |
 | JavaScript | `throw new Error("not implemented")` |
 
@@ -212,6 +213,7 @@ Options:
 **Plan:** `docs/superpowers/plans/2026-03-16-phase1-skeleton-engine.md`
 
 21 tasks across 6 chunks:
+
 1. Project scaffolding (workspace, error types, options, trait)
 2. Rust backend + engine core
 3. Python backend
@@ -219,11 +221,12 @@ Options:
 5. CLI implementation
 6. Edge case fixtures + final validation
 
-### Phase 2: MCP Integration (Spec Complete)
+### Phase 2: MCP Integration (Spec + Plan Complete)
 
 **Spec:** `docs/superpowers/specs/2026-03-16-phase2-mcp-server-design.md`
 
 Key design decisions:
+
 - `skltn-mcp` binary crate, stateless, repo root as CLI arg, stdio transport via `rmcp`
 - 3 tools: `list_repo_structure` (tree listing + byte size + language + `max_depth`), `read_skeleton` (file-only, Budget Guard auto-decides full vs skeleton), `read_full_symbol` (name + `start_line` disambiguation, scope stack for parent context)
 - Budget Guard: `tiktoken-rs` (`cl100k_base`) for real token counting, 2k threshold
@@ -232,11 +235,20 @@ Key design decisions:
 - Path security: canonicalization + prefix check, no info leakage
 - `spawn_blocking` for CPU-bound tree-sitter/tiktoken work
 
-### Phase 3: Observability Layer (Not Yet Designed)
+### Phase 3: Observability Layer (Spec Complete)
 
-- Intercept Anthropic API responses
-- Log `input_tokens` and `cache_read_input_tokens`
-- `CostTracker` struct with savings calculation
+**Spec:** `docs/superpowers/specs/2026-03-16-phase3-observability-layer-design.md`
+
+Key design decisions:
+- `skltn-obs` binary crate, standalone (no `skltn-core` dependency), reverse proxy architecture
+- Base URL override model: client sets `ANTHROPIC_BASE_URL=http://localhost:PORT`, proxy forwards over HTTPS
+- Dual-mode response skimming: non-streaming (buffer + extract) and streaming SSE (background tee + event parsing)
+- `UsageRecord` with `input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`, `cost_usd`
+- JSONL persistence at `~/.skltn/usage.jsonl` via async background writer task
+- Hardcoded pricing in `pricing.rs` with `contains()` matching for model IDs, zero-rate fallback with warning
+- WebSocket endpoint at `/ws` for Phase 4 HUD consumption, with session replay on connect
+- `axum` for HTTP server + WebSocket, `reqwest` for upstream HTTPS, `time` for timestamps
+- Observe and report actuals only — no speculative savings estimation
 
 ### Phase 4: Tauri HUD (Not Yet Designed)
 
@@ -249,12 +261,12 @@ Key design decisions:
 
 ## 7. Success Metrics
 
-| Metric | Target |
-|---|---|
-| Compression Ratio | >75% token reduction per file |
-| Latency | <30ms for files under 5,000 lines |
-| Accuracy | Zero tree-sitter ERROR nodes in skeleton output |
-| Language Coverage | Rust, Python, TypeScript, JavaScript (Phase 1) |
+| Metric            | Target                                          |
+| ----------------- | ----------------------------------------------- |
+| Compression Ratio | >75% token reduction per file                   |
+| Latency           | <30ms for files under 5,000 lines               |
+| Accuracy          | Zero tree-sitter ERROR nodes in skeleton output |
+| Language Coverage | Rust, Python, TypeScript, JavaScript (Phase 1)  |
 
 ---
 
