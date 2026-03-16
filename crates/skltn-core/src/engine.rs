@@ -112,8 +112,9 @@ impl SkeletonEngine {
                     }
                 }
             } else {
-                // Non-structural node — emit verbatim, skip subtree.
-                // No replacement needed, no recursion needed.
+                // Non-structural node — recurse to find nested structural nodes
+                // (e.g., declaration_list inside impl_item, or other wrappers).
+                Self::walk_node(&child, source, backend, options, depth, replacements);
             }
         }
     }

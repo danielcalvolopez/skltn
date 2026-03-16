@@ -1,0 +1,13 @@
+---
+source: crates/skltn-core/tests/rust_backend.rs
+expression: result
+---
+use std::collections::HashMap;
+
+pub fn add(a: i32, b: i32) -> i32 {
+    todo!() // [skltn: 5 lines hidden]
+}
+
+fn helper(x: &str) -> String {
+    todo!() // [skltn: 5 lines hidden]
+}
