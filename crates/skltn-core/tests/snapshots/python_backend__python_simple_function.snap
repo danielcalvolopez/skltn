@@ -1,0 +1,17 @@
+---
+source: crates/skltn-core/tests/python_backend.rs
+expression: result
+---
+from pathlib import Path
+import json
+
+
+def read_config(path: str) -> dict:
+    
+    """Read and parse a JSON configuration file."""
+    pass # [skltn: 5 lines hidden]
+
+
+def validate_config(data: dict) -> dict:
+    
+    pass # [skltn: 7 lines hidden]
