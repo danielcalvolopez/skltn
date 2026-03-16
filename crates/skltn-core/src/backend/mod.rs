@@ -4,6 +4,10 @@ pub mod python;
 pub mod rust;
 pub mod typescript;
 
+use self::javascript::JavaScriptBackend;
+use self::python::PythonBackend;
+use self::rust::RustBackend;
+use self::typescript::TypeScriptBackend;
 use tree_sitter::{Language, Node};
 
 /// Trait that each supported language must implement.
@@ -50,4 +54,26 @@ pub trait LanguageBackend {
     /// `indent` is the whitespace string matching the body's indentation level.
     /// `body` and `source` are provided so backends can extract leading docstrings (Python).
     fn format_replacement(&self, indent: &str, line_count: usize, body: &Node, source: &[u8]) -> String;
+}
+
+/// Returns the appropriate backend for a file extension.
+pub fn backend_for_extension(ext: &str) -> Option<Box<dyn LanguageBackend>> {
+    match ext {
+        "rs" => Some(Box::new(RustBackend)),
+        "py" => Some(Box::new(PythonBackend)),
+        "ts" => Some(Box::new(TypeScriptBackend)),
+        "js" => Some(Box::new(JavaScriptBackend)),
+        _ => None,
+    }
+}
+
+/// Returns the appropriate backend for a language name string.
+pub fn backend_for_lang(lang: &str) -> Option<Box<dyn LanguageBackend>> {
+    match lang {
+        "rust" | "rs" => Some(Box::new(RustBackend)),
+        "python" | "py" => Some(Box::new(PythonBackend)),
+        "typescript" | "ts" => Some(Box::new(TypeScriptBackend)),
+        "javascript" | "js" => Some(Box::new(JavaScriptBackend)),
+        _ => None,
+    }
 }
