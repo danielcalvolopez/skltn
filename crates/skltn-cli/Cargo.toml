@@ -1,0 +1,14 @@
+[package]
+name = "skltn-cli"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "skltn"
+path = "src/main.rs"
+
+[dependencies]
+skltn-core = { path = "../skltn-core" }
+clap = { version = "4", features = ["derive"] }
+ignore = "0.4"
+is-terminal = "0.4"
