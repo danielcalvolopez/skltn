@@ -1,3 +1,4 @@
+pub mod dashboard;
 pub mod pricing;
 pub mod proxy;
 pub mod skim;
