@@ -1,9 +1,13 @@
 use std::path::Path;
+use std::sync::{Arc, Mutex};
+
+use skltn_mcp::session::SessionTracker;
 
 fn main() {
     let root = Path::new(".");
     let root = root.canonicalize().unwrap();
     let tokenizer = tiktoken_rs::cl100k_base().unwrap();
+    let tracker = Arc::new(Mutex::new(SessionTracker::new()));
 
     println!("=== SMOKE TEST: skltn-mcp tools against the skltn codebase ===\n");
 
@@ -34,6 +38,7 @@ fn main() {
         &root,
         "crates/skltn-core/src/options.rs",
         &tokenizer,
+        &tracker,
     );
     println!("{}\n", result);
     assert!(
@@ -48,6 +53,7 @@ fn main() {
         &root,
         "crates/skltn-mcp/src/resolve.rs",
         &tokenizer,
+        &tracker,
     );
     let first_line = result.lines().next().unwrap_or("");
     println!("{}", first_line);
@@ -119,6 +125,7 @@ fn main() {
         &root,
         "nonexistent.rs",
         &tokenizer,
+        &tracker,
     );
     println!("{}", result);
     assert!(
@@ -130,7 +137,7 @@ fn main() {
     // --- Test 10: Error - unsupported language ---
     println!("--- TEST 10: Error - unsupported language ---");
     let result =
-        skltn_mcp::tools::read_skeleton::read_skeleton_or_full(&root, "CLAUDE.md", &tokenizer);
+        skltn_mcp::tools::read_skeleton::read_skeleton_or_full(&root, "CLAUDE.md", &tokenizer, &tracker);
     println!("{}", result);
     assert!(
         result.contains("Unsupported language"),
@@ -144,6 +151,7 @@ fn main() {
         &root,
         "../../../etc/passwd",
         &tokenizer,
+        &tracker,
     );
     println!("{}", result);
     assert!(

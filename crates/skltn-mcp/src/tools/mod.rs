@@ -3,7 +3,7 @@ pub mod read_full_symbol;
 pub mod read_skeleton;
 
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
@@ -12,6 +12,8 @@ use rmcp::{tool, tool_handler, tool_router, ErrorData, ServerHandler};
 use serde::Deserialize;
 use skltn_core::backend::LanguageBackend;
 use tiktoken_rs::CoreBPE;
+
+use crate::session::SessionTracker;
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -98,6 +100,7 @@ pub struct ReadFullSymbolParams {
 pub struct SkltnServer {
     root: PathBuf,
     tokenizer: Arc<CoreBPE>,
+    session_tracker: Arc<Mutex<SessionTracker>>,
     tool_router: ToolRouter<Self>,
 }
 
@@ -107,6 +110,7 @@ impl SkltnServer {
         Self {
             root,
             tokenizer: Arc::new(tokenizer),
+            session_tracker: Arc::new(Mutex::new(SessionTracker::new())),
             tool_router,
         }
     }
@@ -169,9 +173,10 @@ impl SkltnServer {
         let root = self.root.clone();
         let file = params.file;
         let tokenizer = Arc::clone(&self.tokenizer);
+        let tracker = Arc::clone(&self.session_tracker);
 
         let output = tokio::task::spawn_blocking(move || {
-            read_skeleton::read_skeleton_or_full(&root, &file, &tokenizer)
+            read_skeleton::read_skeleton_or_full(&root, &file, &tokenizer, &tracker)
         })
         .await
         .map_err(|e| ErrorData::internal_error(format!("Internal error: {e}"), None))?;
