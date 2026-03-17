@@ -173,5 +173,50 @@ fn main() {
     assert!(result.contains("not found"), "Should report symbol not found");
     println!("PASS\n");
 
-    println!("=== ALL 12 SMOKE TESTS PASSED ===");
+    // --- Test 13: Cache-aware read_skeleton ---
+    println!("--- TEST 13: cache-aware read_skeleton (resolve.rs read twice) ---");
+    // Use a fresh tracker to isolate this test
+    let cache_tracker = Arc::new(Mutex::new(SessionTracker::new()));
+    let target_file = "crates/skltn-mcp/src/resolve.rs";
+
+    // First read: should skeletonize (>2k tokens, no prior serve)
+    let first_read = skltn_mcp::tools::read_skeleton::read_skeleton_or_full(
+        &root,
+        target_file,
+        &tokenizer,
+        &cache_tracker,
+    );
+    let first_header = first_read.lines().next().unwrap_or("");
+    println!("1st read: {}", first_header);
+    assert!(
+        first_read.contains("skeleton:"),
+        "First read should skeletonize a >2k token file"
+    );
+    assert!(
+        !first_read.contains("cache-aware"),
+        "First read should not be cache-aware"
+    );
+
+    // Manually seed the tracker (simulates a prior full serve, e.g. file was
+    // small on a previous read or served via a different path)
+    let resolved = root.join(target_file).canonicalize().unwrap();
+    cache_tracker.lock().unwrap().record_full(&resolved);
+
+    // Second read: same file, but tracker now has a RecentlyServed hint —
+    // should serve full with (cache-aware) tag
+    let second_read = skltn_mcp::tools::read_skeleton::read_skeleton_or_full(
+        &root,
+        target_file,
+        &tokenizer,
+        &cache_tracker,
+    );
+    let second_header = second_read.lines().next().unwrap_or("");
+    println!("2nd read: {}", second_header);
+    assert!(
+        second_read.contains("full file (cache-aware)"),
+        "Second read should serve full with cache-aware tag"
+    );
+    println!("PASS: cache-aware serving works\n");
+
+    println!("=== ALL 13 SMOKE TESTS PASSED ===");
 }
