@@ -65,7 +65,7 @@ pub fn read_skeleton_or_full(root: &Path, file: &str, tokenizer: &CoreBPE) -> St
         ""
     };
 
-    match budget::should_skeletonize(&source, tokenizer) {
+    match budget::should_skeletonize(&source, tokenizer, crate::budget::CacheHint::Unknown) {
         BudgetDecision::ReturnFull { original_tokens } => {
             format!(
                 "[file: {file} | language: {lang} | tokens: {original_tokens} | full file{warning}]\n\n{source}"
