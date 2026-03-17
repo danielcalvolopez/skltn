@@ -1,3 +1,5 @@
+/* --- Fonts --- */
+
 @font-face {
     font-family: 'JetBrains Mono';
     src: url('./assets/JetBrainsMono/JetBrainsMono-Regular.woff2') format('woff2');
@@ -14,15 +16,215 @@
     font-display: swap;
 }
 
-/* Styles added in Chunk 5 */
+/* --- Reset --- */
+
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+    border-radius: 0;
 }
+
+/* --- Base --- */
 
 body {
     background: #0a0a0a;
     color: #cccccc;
     font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+}
+
+/* --- Connection Status --- */
+
+.connection-status {
+    padding: 6px 12px;
+    background: #0d0d0d;
+    border-bottom: 1px solid #222;
+    color: #663333;
+    font-size: 10px;
+    letter-spacing: 1px;
+}
+
+/* --- Dashboard Layout --- */
+
+.dashboard {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.dashboard-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 200px;
+    grid-template-rows: auto 1fr auto;
+    grid-template-areas:
+        "header  header"
+        "main    sidebar"
+        "footer  footer";
+    min-height: 0;
+}
+
+.dashboard-header {
+    grid-area: header;
+    border-bottom: 1px solid #222;
+}
+
+.dashboard-main {
+    grid-area: main;
+    min-height: 0;
+}
+
+.dashboard-sidebar {
+    grid-area: sidebar;
+    border-left: 1px solid #222;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-y: auto;
+}
+
+.dashboard-footer {
+    grid-area: footer;
+    border-top: 1px solid #222;
+    min-height: 0;
+    max-height: 40vh;
+    overflow-y: auto;
+}
+
+/* --- Metrics Bar --- */
+
+.metrics-bar {
+    display: flex;
+    gap: 0;
+}
+
+.metric {
+    flex: 1;
+    padding: 10px 16px;
+    border-right: 1px solid #222;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.metric:last-child {
+    border-right: none;
+}
+
+.metric-label {
+    font-size: 9px;
+    font-weight: 400;
+    color: #555;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+}
+
+.metric-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: #00ff88;
+}
+
+/* --- Token Chart --- */
+
+.token-chart {
+    height: 100%;
+    width: 100%;
+    min-height: 200px;
+}
+
+/* --- Cache Ring --- */
+
+.cache-ring {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+/* --- Model Breakdown --- */
+
+.model-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.model-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.model-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.model-name {
+    font-size: 9px;
+    color: #666;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.model-cost {
+    font-size: 12px;
+    font-weight: 700;
+    color: #00ff88;
+}
+
+.model-bar-track {
+    height: 3px;
+    background: #1a1a1a;
+}
+
+.model-bar-fill {
+    height: 100%;
+    background: #003322;
+}
+
+/* --- Request Table --- */
+
+.request-table {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.request-table table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10px;
+}
+
+.request-table thead {
+    position: sticky;
+    top: 0;
+    background: #0d0d0d;
+    z-index: 1;
+}
+
+.request-table th {
+    padding: 6px 8px;
+    text-align: left;
+    font-size: 9px;
+    font-weight: 400;
+    color: #555;
+    letter-spacing: 1.5px;
+    border-bottom: 1px solid #222;
+}
+
+.request-table td {
+    padding: 4px 8px;
+    color: #999;
+    border-bottom: 1px solid #111;
+}
+
+.request-table tbody tr:nth-child(even) {
+    background: rgba(0, 255, 136, 0.03);
 }
