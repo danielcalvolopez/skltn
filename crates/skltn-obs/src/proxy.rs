@@ -68,13 +68,24 @@ pub async fn proxy_handler(
     let is_streaming = content_type.contains("text/event-stream");
 
     if is_streaming {
-        // Streaming path — placeholder until Task 8/9
-        let stream = upstream_resp.bytes_stream();
-        let body = Body::from_stream(stream);
-        let mut response = Response::new(body);
-        *response.status_mut() = status;
-        *response.headers_mut() = resp_headers;
-        Ok(response)
+        let mut parts = http::Response::new(()).into_parts().0;
+        parts.status = status;
+        parts.headers = resp_headers;
+
+        if let Some(model) = model {
+            Ok(crate::skim::skim_streaming(
+                parts,
+                upstream_resp.bytes_stream(),
+                model,
+                state.tracker.clone(),
+            ))
+        } else {
+            let body = Body::from_stream(upstream_resp.bytes_stream());
+            let mut response = Response::new(body);
+            *response.status_mut() = parts.status;
+            *response.headers_mut() = parts.headers;
+            Ok(response)
+        }
     } else {
         let resp_bytes = upstream_resp.bytes().await.map_err(|e| {
             tracing::error!("Failed to read upstream response body: {e}");
