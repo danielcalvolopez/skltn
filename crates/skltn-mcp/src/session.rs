@@ -9,6 +9,7 @@ use crate::budget::CacheHint;
 /// provider's prompt cache.
 ///
 /// The tracker's lifetime matches the MCP server process — no eviction needed.
+#[derive(Default)]
 pub struct SessionTracker {
     served_full: HashMap<PathBuf, Instant>,
 }
