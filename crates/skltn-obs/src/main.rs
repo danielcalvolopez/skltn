@@ -10,7 +10,7 @@ use tokio::signal;
 
 use skltn_obs::proxy::AppState;
 use skltn_obs::tracker::CostTracker;
-use skltn_obs::{proxy, ws};
+use skltn_obs::{dashboard, proxy, ws};
 
 #[derive(Parser)]
 #[command(name = "skltn-obs", about = "Anthropic API observability proxy")]
@@ -99,7 +99,9 @@ async fn main() {
     };
 
     let app = Router::new()
+        .route("/", get(redirect_to_dashboard))
         .route("/ws", get(ws::ws_handler))
+        .nest_service("/dashboard", dashboard::static_handler())
         .fallback(proxy::proxy_handler)
         .with_state(state)
         .layer(axum::extract::DefaultBodyLimit::max(200 * 1024 * 1024));
@@ -138,6 +140,10 @@ async fn main() {
     tracing::info!("Proxy shut down, draining JSONL writer...");
     tracker.shutdown().await;
     tracing::info!("Shutdown complete");
+}
+
+async fn redirect_to_dashboard() -> axum::response::Redirect {
+    axum::response::Redirect::temporary("/dashboard")
 }
 
 async fn shutdown_signal() {
