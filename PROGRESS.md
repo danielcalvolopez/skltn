@@ -19,7 +19,7 @@
 **Branch:** `feature/phase2-mcp-server` (worktree at `.worktrees/phase2-mcp-server`)
 **Plan:** `docs/superpowers/plans/2026-03-16-phase2-mcp-server.md`
 **Spec:** `docs/superpowers/specs/2026-03-16-phase2-mcp-server-design.md`
-**Tests:** 46 skltn-mcp tests + 41 skltn-core tests = 87 total, 0 clippy warnings
+**Tests:** 60 skltn-mcp tests + 41 skltn-core tests = 101 total, 0 clippy warnings
 
 ---
 
@@ -113,12 +113,31 @@
 
 ---
 
+## Phase 2 Amendment: Cache-Aware Budget Guard (2026-03-17)
+**Status:** Complete — implemented and tested
+**Trigger:** Prompt caching economics analysis revealed skeletonizing cached files is 2.5x more expensive than serving full
+**Scope:** Budget Guard in `skltn-mcp` gains `CacheHint` enum + `SessionTracker` (in-memory `HashMap<PathBuf, Instant>` of files served full)
+**Plan:** `docs/superpowers/plans/2026-03-17-cache-aware-budget-guard.md` (5 tasks, 4 chunks)
+**Files Updated:** Phase 2 spec (amendment section), Phase 3 spec (future integration note), PRD (section 6.1)
+
+### Amendment Task Progress
+| Task | Description | Status |
+|------|-------------|--------|
+| 1 | Add CacheHint enum and update should_skeletonize | Complete |
+| 2 | Create SessionTracker module | Complete |
+| 3 | Wire SessionTracker into SkltnServer and read_skeleton | Complete |
+| 4 | Full workspace build, test, and lint validation | Complete |
+| 5 | Update PROGRESS.md | Complete |
+
+---
+
 ## Blockers & Decisions
 | Date | Item | Resolution |
 |------|------|------------|
 | 2026-03-16 | Engine skipped non-structural wrapper nodes (e.g., `declaration_list`) | Fixed: recurse into all non-structural nodes to find nested structural children |
 | 2026-03-16 | Clippy: derivable Default for SkeletonOptions | Fixed: removed manual Default impl, added #[derive(Default)] |
 | 2026-03-16 | Plan spec'd `pub mod` in main.rs for test access | Fixed: created lib.rs with pub modules (idiomatic Rust for binary+library crate) |
+| 2026-03-17 | Prompt caching makes skeletonization counter-productive for cached files | Design amendment: Budget Guard gains CacheHint enum + SessionTracker. Skeleton on first read, full on subsequent reads. Phase 3 integration point defined for actual cache data (~98% accuracy). |
 | 2026-03-16 | Path traversal: canonicalize() fails on non-existent paths before prefix check | Fixed: added logical normalization fallback to detect traversal even when target doesn't exist |
 | 2026-03-16 | Clippy too_many_arguments on walk_node | Fixed: refactored to WalkState struct with method |
 
@@ -129,3 +148,5 @@
 |------|---------|----------------|-------|
 | 2026-03-16 | 1 | All 21 tasks (Phase 1) | Full Phase 1 implementation. Merged to main. Ready for Phase 2. |
 | 2026-03-16 | 2 | All 13 tasks (Phase 2) | Full Phase 2 implementation. skltn-mcp crate with 3 MCP tools (list_repo_structure, read_skeleton, read_full_symbol), Budget Guard, symbol resolution, path security, rmcp server wiring. 87 workspace tests, 0 clippy warnings. Ready to merge. |
+| 2026-03-17 | 3 | Design + plan (Phase 2 amendment) | Prompt caching economics analysis. Budget Guard redesigned with CacheHint enum + SessionTracker. Phase 2 spec amended, Phase 3 spec updated with future integration note, PRD updated. Implementation plan written and reviewed (5 tasks, 4 chunks). No code changes yet. |
+| 2026-03-17 | 4 | All 5 tasks (Phase 2 amendment) | Cache-aware Budget Guard implementation. CacheHint enum (Unknown, RecentlyServed, CacheConfirmed, CacheExpired), SessionTracker (HashMap<PathBuf, Instant>), wired into SkltnServer and read_skeleton. 14 new tests added. 101 workspace tests, 0 clippy warnings. |
