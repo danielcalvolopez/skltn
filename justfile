@@ -1,3 +1,5 @@
+export PATH := env("HOME") / ".cargo/bin:" + env("PATH")
+
 # Build the dashboard frontend
 build-ui:
     cd crates/skltn-obs/dashboard && pnpm install && pnpm build
