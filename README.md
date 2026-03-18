@@ -4,12 +4,15 @@ High-performance Rust toolchain for AI context window optimization via AST-based
 
 "Skltn lets Claude read your entire codebase architecture without filling up its context window."
 
-## Prerequisites
+## How It Works
 
-- [Rust](https://rustup.rs/) (stable toolchain)
-- [Node.js](https://nodejs.org/) >= 18 + [pnpm](https://pnpm.io/)
-- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (`claude`)
-- [just](https://github.com/casey/just) (optional, for build shortcuts)
+When Claude needs to read a file, skltn's MCP server intercepts the request:
+
+- **Small files** (≤2000 tokens) are served in full — no changes.
+- **Large files** (>2000 tokens) are skeletonized via AST parsing — function signatures, type definitions, and doc comments are preserved while implementation bodies are collapsed.
+- When Claude needs a specific function body, it calls `read_full_symbol` to drill down into just that symbol.
+
+The observability proxy sits between Claude Code and the Anthropic API, recording every request so you can see real-time cost, token usage, and savings on a live dashboard.
 
 ## Architecture
 
@@ -24,13 +27,34 @@ Claude Code ──► skltn-obs proxy (port 8080) ──► Anthropic API
                     │
 skltn-mcp ──────────┼── savings.jsonl ◄── MCP records skeletonization savings
                     │
+                    ├── drilldowns.jsonl ◄── MCP records symbol drilldowns
+                    │
                     └── ~/.skltn/
 ```
 
-- **skltn-obs** — HTTP proxy that sits between Claude Code and the Anthropic API. Records token usage, calculates cost, serves a real-time dashboard.
-- **skltn-mcp** — MCP server that provides `read_skeleton`, `read_full_symbol`, and `list_repo_structure` tools. Skeletonizes large files to reduce context window usage.
-- **skltn-core** — AST-based skeletonization engine (Rust, Python, TypeScript, JavaScript).
-- **skltn-cli** — Standalone CLI for skeletonizing files offline.
+### Crates
+
+| Crate | Description |
+| --- | --- |
+| **skltn-core** | AST-based skeletonization engine. Supports Rust, Python, TypeScript, and JavaScript. |
+| **skltn-cli** | Standalone CLI for skeletonizing files offline. |
+| **skltn-mcp** | MCP server providing `read_skeleton`, `read_full_symbol`, and `list_repo_structure` tools. Tracks savings and drilldown events to JSONL. |
+| **skltn-obs** | HTTP proxy between Claude Code and Anthropic API. Records token usage and cost, watches savings files, and serves a real-time dashboard via WebSocket. |
+
+### MCP Tools
+
+| Tool | Description |
+| --- | --- |
+| `list_repo_structure` | Directory tree with file sizes and language detection. |
+| `read_skeleton` | Returns full file if ≤2000 tokens, otherwise returns the skeletonized AST view. |
+| `read_full_symbol` | Drills into a specific symbol by name, with line number disambiguation for overloads. |
+
+## Prerequisites
+
+- [Rust](https://rustup.rs/) (stable toolchain)
+- [Node.js](https://nodejs.org/) >= 18 + [pnpm](https://pnpm.io/)
+- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (`claude`)
+- [just](https://github.com/casey/just) (optional, for build shortcuts)
 
 ## Local Setup
 
@@ -80,23 +104,48 @@ All API requests now flow through the proxy. The dashboard shows real-time metri
 
 Navigate to [http://localhost:8080/dashboard](http://localhost:8080/dashboard) in your browser.
 
-## Dashboard Metrics
+## Dashboard
 
-| Metric        | Source    | Description                               |
-| ------------- | --------- | ----------------------------------------- |
-| Session Cost  | obs proxy | Total USD spent on API calls this session |
-| Skltn Savings | MCP + obs | Estimated USD saved by skeletonization    |
-| Tokens        | obs proxy | Total tokens consumed (input + output)    |
-| Tokens Saved  | MCP       | Total tokens avoided via skeletonization  |
-| Requests      | obs proxy | Number of API requests                    |
+The dashboard connects over WebSocket and updates in real-time.
 
-The chart shows cumulative token usage with two lines: **With Skltn** (actual) vs **Without Skltn** (what it would have been). The gap is your savings.
+**Metrics bar** — top-level indicators at a glance:
 
-Savings are only recorded when the MCP server skeletonizes a file (>2000 tokens). Small files served in full produce no savings records.
+| Metric | Description |
+| --- | --- |
+| Files Explored | Number of files read via skeletonization |
+| Context Density | Percentage of original tokens used after skeletonization (27% = 73% reduction) |
+| Drilldowns | Number of `read_full_symbol` calls |
+| Tokens Used | Total tokens consumed vs context window limit |
+
+**Sidebar** — cost tracking and model breakdown:
+
+| Metric | Description |
+| --- | --- |
+| Session Cost | Total USD spent on API calls this session |
+| Cost Saved | Estimated USD saved by skeletonization |
+| Model Breakdown | Per-model token usage (Opus, Sonnet, Haiku) |
+
+**Exploration Hero** — shows the exploration multiplier (how many more files you can explore with skeletonization vs reading files in full).
+
+**Token chart** — cumulative token usage with two lines: **With Skltn** (actual) vs **Without Skltn** (projected). The gap is your savings.
+
+**Request table** — per-request details with model, token counts, and cost.
+
+## Data Storage
+
+All session data is stored in `~/.skltn/`:
+
+| File | Written by | Contents |
+| --- | --- | --- |
+| `usage.jsonl` | skltn-obs | One JSON line per API request (model, tokens, cost) |
+| `savings.jsonl` | skltn-mcp | One JSON line per skeletonization (file, original vs skeleton tokens) |
+| `drilldowns.jsonl` | skltn-mcp | One JSON line per `read_full_symbol` call |
+
+Files are session-scoped — truncated on proxy startup.
 
 ## Using with Other Projects
 
-skltn works with any project, not just itself. You can run it from anywhere using the built binaries.
+skltn works with any project. You can run it from anywhere using the built binaries.
 
 ### Option A: Use absolute paths
 
@@ -104,7 +153,7 @@ skltn works with any project, not just itself. You can run it from anywhere usin
 # Set this to wherever you cloned skltn
 SKLTN=/path/to/skltn
 
-# Terminal 1 — start the proxy (runs from anywhere)
+# Terminal 1 — start the proxy
 $SKLTN/target/release/skltn-obs --port 8080
 
 # Terminal 2 — cd to your project and register the MCP server
@@ -134,8 +183,14 @@ The MCP registration is per-project in Claude Code, so you need to run `claude m
 ## Commands
 
 ```bash
-# Build
-cargo build --workspace
+# Build (frontend + Rust)
+just build
+
+# Build dashboard only
+just build-ui
+
+# Dev mode (proxy on :8080)
+just dev
 
 # Test
 cargo test --workspace
@@ -146,9 +201,15 @@ cargo clippy --all-targets --all-features
 # CLI (standalone skeletonization)
 cargo run -p skltn-cli -- <PATH>
 
-# Proxy
-cargo run -p skltn-obs -- --port 8080
-
 # Dashboard dev server (hot reload, proxies WS to port 8080)
 cd crates/skltn-obs/dashboard && pnpm dev
 ```
+
+## Supported Languages
+
+| Language | Extensions |
+| --- | --- |
+| Rust | `.rs` |
+| Python | `.py` |
+| TypeScript | `.ts` |
+| JavaScript | `.js` |
