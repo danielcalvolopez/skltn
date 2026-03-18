@@ -1,6 +1,7 @@
 pub mod list_repo_structure;
 pub mod read_full_symbol;
 pub mod read_skeleton;
+pub mod restore_session;
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};

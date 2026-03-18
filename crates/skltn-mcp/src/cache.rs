@@ -44,7 +44,6 @@ pub struct SkeletonCache {
     manifest_entries: Mutex<Vec<String>>,
     last_flush: Mutex<Instant>,
     manifest_dirty: Mutex<bool>,
-    has_rotated: Mutex<bool>,
 }
 
 impl SkeletonCache {
@@ -76,13 +75,21 @@ impl SkeletonCache {
             }
         };
 
+        // Rotate any existing manifest to the previous-manifest slot on
+        // session start. This makes `load_previous_manifest` available
+        // immediately without requiring a flush first.
+        let manifest_path = cache_dir.join("manifest.json");
+        let previous_path = cache_dir.join("manifest.previous.json");
+        if manifest_path.is_file() {
+            let _ = fs::rename(&manifest_path, &previous_path);
+        }
+
         let cache = Self {
             cache_dir,
             project_root: project_root.to_path_buf(),
             manifest_entries: Mutex::new(Vec::new()),
             last_flush: Mutex::new(Instant::now()),
             manifest_dirty: Mutex::new(false),
-            has_rotated: Mutex::new(false),
         };
 
         cache.cleanup();
@@ -195,27 +202,12 @@ impl SkeletonCache {
         self.cache_dir.join("manifest.previous.json")
     }
 
-    /// Flush manifest entries to disk. On first flush of a session, rotates
-    /// any existing manifest to the previous-manifest slot.
+    /// Flush manifest entries to disk.
     fn flush_manifest_inner(&self) {
         let entries = self.manifest_entries.lock().unwrap();
         if entries.is_empty() {
             return;
         }
-
-        // Rotate on first flush of this session
-        let mut has_rotated = self.has_rotated.lock().unwrap();
-        if !*has_rotated {
-            let current = self.manifest_path();
-            if current.is_file() {
-                let prev = self.previous_manifest_path();
-                if let Err(e) = fs::rename(&current, &prev) {
-                    tracing::warn!("Failed to rotate manifest: {e}");
-                }
-            }
-            *has_rotated = true;
-        }
-        drop(has_rotated);
 
         let manifest = SessionManifest {
             version: 1,
