@@ -2,11 +2,13 @@ pub mod js_common;
 pub mod javascript;
 pub mod python;
 pub mod rust;
+pub mod tsx;
 pub mod typescript;
 
 use self::javascript::JavaScriptBackend;
 use self::python::PythonBackend;
 use self::rust::RustBackend;
+use self::tsx::TsxBackend;
 use self::typescript::TypeScriptBackend;
 use tree_sitter::{Language, Node};
 
@@ -62,7 +64,8 @@ pub fn backend_for_extension(ext: &str) -> Option<Box<dyn LanguageBackend>> {
         "rs" => Some(Box::new(RustBackend)),
         "py" => Some(Box::new(PythonBackend)),
         "ts" => Some(Box::new(TypeScriptBackend)),
-        "js" => Some(Box::new(JavaScriptBackend)),
+        "tsx" => Some(Box::new(TsxBackend)),
+        "js" | "jsx" => Some(Box::new(JavaScriptBackend)),
         _ => None,
     }
 }
@@ -73,7 +76,8 @@ pub fn backend_for_lang(lang: &str) -> Option<Box<dyn LanguageBackend>> {
         "rust" | "rs" => Some(Box::new(RustBackend)),
         "python" | "py" => Some(Box::new(PythonBackend)),
         "typescript" | "ts" => Some(Box::new(TypeScriptBackend)),
-        "javascript" | "js" => Some(Box::new(JavaScriptBackend)),
+        "tsx" => Some(Box::new(TsxBackend)),
+        "javascript" | "js" | "jsx" => Some(Box::new(JavaScriptBackend)),
         _ => None,
     }
 }
