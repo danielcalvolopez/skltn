@@ -40,6 +40,8 @@ fn main() {
         &tokenizer,
         &tracker,
         &None,
+        None,
+        true,
     );
     println!("{}\n", result);
     assert!(
@@ -56,6 +58,8 @@ fn main() {
         &tokenizer,
         &tracker,
         &None,
+        None,
+        true,
     );
     let first_line = result.lines().next().unwrap_or("");
     println!("{}", first_line);
@@ -132,6 +136,8 @@ fn main() {
         &tokenizer,
         &tracker,
         &None,
+        None,
+        true,
     );
     println!("{}", result);
     assert!(
@@ -143,7 +149,7 @@ fn main() {
     // --- Test 10: Error - unsupported language ---
     println!("--- TEST 10: Error - unsupported language ---");
     let result =
-        skltn_mcp::tools::read_skeleton::read_skeleton_or_full(&root, "CLAUDE.md", &tokenizer, &tracker, &None);
+        skltn_mcp::tools::read_skeleton::read_skeleton_or_full(&root, "CLAUDE.md", &tokenizer, &tracker, &None, None, true);
     println!("{}", result);
     assert!(
         result.contains("Unsupported language"),
@@ -159,6 +165,8 @@ fn main() {
         &tokenizer,
         &tracker,
         &None,
+        None,
+        true,
     );
     println!("{}", result);
     assert!(
@@ -194,6 +202,8 @@ fn main() {
         &tokenizer,
         &cache_tracker,
         &None,
+        None,
+        true,
     );
     let first_header = first_read.lines().next().unwrap_or("");
     println!("1st read: {}", first_header);
@@ -219,6 +229,8 @@ fn main() {
         &tokenizer,
         &cache_tracker,
         &None,
+        None,
+        true,
     );
     let second_header = second_read.lines().next().unwrap_or("");
     println!("2nd read: {}", second_header);

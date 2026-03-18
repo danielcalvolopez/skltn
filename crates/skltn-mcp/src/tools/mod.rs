@@ -13,6 +13,7 @@ use serde::Deserialize;
 use skltn_core::backend::LanguageBackend;
 use tiktoken_rs::CoreBPE;
 
+use crate::cache::SkeletonCache;
 use crate::savings::{DrilldownWriter, SavingsWriter};
 use crate::session::SessionTracker;
 
@@ -106,6 +107,7 @@ pub struct SkltnServer {
     session_tracker: Arc<Mutex<SessionTracker>>,
     savings_writer: Arc<Option<SavingsWriter>>,
     drilldown_writer: Arc<Option<DrilldownWriter>>,
+    skeleton_cache: Arc<Option<SkeletonCache>>,
     tool_router: ToolRouter<Self>,
 }
 
@@ -120,12 +122,19 @@ impl SkltnServer {
         if drilldown_writer.is_none() {
             tracing::warn!("Drilldown writer unavailable — drilldown records will not be recorded");
         }
+        let skeleton_cache = SkeletonCache::new(&root);
+        if skeleton_cache.is_some() {
+            tracing::info!("Skeleton cache initialized for project");
+        } else {
+            tracing::warn!("Skeleton cache unavailable — skeletons will not be cached across sessions");
+        }
         Self {
             root,
             tokenizer: Arc::new(tokenizer),
             session_tracker: Arc::new(Mutex::new(SessionTracker::new())),
             savings_writer: Arc::new(savings_writer),
             drilldown_writer: Arc::new(drilldown_writer),
+            skeleton_cache: Arc::new(skeleton_cache),
             tool_router,
         }
     }
@@ -190,9 +199,10 @@ impl SkltnServer {
         let tokenizer = Arc::clone(&self.tokenizer);
         let tracker = Arc::clone(&self.session_tracker);
         let savings_writer = Arc::clone(&self.savings_writer);
+        let skeleton_cache = Arc::clone(&self.skeleton_cache);
 
         let output = tokio::task::spawn_blocking(move || {
-            read_skeleton::read_skeleton_or_full(&root, &file, &tokenizer, &tracker, &savings_writer)
+            read_skeleton::read_skeleton_or_full(&root, &file, &tokenizer, &tracker, &savings_writer, skeleton_cache.as_ref().as_ref(), true)
         })
         .await
         .map_err(|e| ErrorData::internal_error(format!("Internal error: {e}"), None))?;

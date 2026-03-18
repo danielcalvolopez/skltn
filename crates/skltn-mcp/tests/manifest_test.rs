@@ -1,6 +1,16 @@
 use std::fs;
+use std::sync::{Arc, Mutex};
 use tempfile::tempdir;
 use skltn_mcp::cache::SkeletonCache;
+use skltn_mcp::session::SessionTracker;
+
+fn tokenizer() -> tiktoken_rs::CoreBPE {
+    tiktoken_rs::cl100k_base().unwrap()
+}
+
+fn new_tracker() -> Arc<Mutex<SessionTracker>> {
+    Arc::new(Mutex::new(SessionTracker::new()))
+}
 
 #[test]
 fn test_record_manifest_entry_stores_file() {
@@ -90,4 +100,39 @@ fn test_manifest_flush_is_atomic() {
     assert_eq!(parsed["version"], 1);
     assert!(parsed["timestamp"].is_string());
     assert_eq!(parsed["files"][0], "src/main.rs");
+}
+
+#[test]
+fn test_read_skeleton_records_to_manifest() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+    fs::write(root.join("main.rs"), "fn main() {}\n").unwrap();
+
+    let cache = SkeletonCache::new(root).unwrap();
+    let tok = tokenizer();
+
+    skltn_mcp::tools::read_skeleton::read_skeleton_or_full(
+        root, "main.rs", &tok, &new_tracker(), &None, Some(&cache), true,
+    );
+    cache.force_flush_manifest();
+
+    let manifest = cache.load_current_manifest().unwrap();
+    assert_eq!(manifest.files, vec!["main.rs"]);
+}
+
+#[test]
+fn test_read_skeleton_record_false_does_not_write_manifest() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+    fs::write(root.join("main.rs"), "fn main() {}\n").unwrap();
+
+    let cache = SkeletonCache::new(root).unwrap();
+    let tok = tokenizer();
+
+    skltn_mcp::tools::read_skeleton::read_skeleton_or_full(
+        root, "main.rs", &tok, &new_tracker(), &None, Some(&cache), false,
+    );
+    cache.force_flush_manifest();
+
+    assert!(cache.load_current_manifest().is_none());
 }
