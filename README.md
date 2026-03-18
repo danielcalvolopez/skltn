@@ -1,8 +1,6 @@
 # skltn
 
-High-performance Rust toolchain for AI context window optimization via AST-based skeletonization and observability.
-
-Skltn lets Claude read your entire codebase architecture without filling up its context window.
+High-performance Rust toolchain that puts 5-15x more codebase in Claude's context window. Parses your code into ASTs, keeps signatures and types, collapses the rest. One command to start.
 
 ## Quick Start
 
