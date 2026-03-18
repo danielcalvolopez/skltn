@@ -13,7 +13,7 @@ pub fn run() -> Result<(), String> {
         ));
     }
 
-    eprintln!("Stopping skltn-obs proxy (PID {}, port {})...", info.pid, info.port);
+    println!("Stopping skltn-obs proxy (PID {}, port {})...", info.pid, info.port);
 
     let status = Command::new("kill")
         .arg(info.pid.to_string())
@@ -25,6 +25,6 @@ pub fn run() -> Result<(), String> {
     }
 
     pid::remove();
-    eprintln!("Proxy stopped.");
+    println!("Proxy stopped.");
     Ok(())
 }
