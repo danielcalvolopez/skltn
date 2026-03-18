@@ -60,8 +60,120 @@ pub async fn skim_nonstreaming(
     let mut response = Response::new(Body::from(body_bytes));
     *response.status_mut() = parts.status;
     *response.headers_mut() = parts.headers;
-    *response.version_mut() = parts.version;
+    // Strip hop-by-hop headers — reqwest already decoded the transfer encoding,
+    // so forwarding these causes hyper to double-encode or misframe the response.
+    strip_hop_by_hop(response.headers_mut());
     response
+}
+
+/// Remove hop-by-hop headers that must not be forwarded by a proxy.
+/// These are connection-specific and lose meaning when the body has been re-buffered.
+pub(crate) fn strip_hop_by_hop(headers: &mut http::HeaderMap) {
+    headers.remove(http::header::TRANSFER_ENCODING);
+    headers.remove(http::header::CONNECTION);
+    headers.remove(http::header::CONTENT_LENGTH);
+}
+
+/// Parses SSE events from a fully-buffered streaming response body and records usage.
+/// Used when reqwest has already consumed the body (e.g. HTTP/2 responses where
+/// bytes_stream() returns empty).
+pub async fn skim_streaming_buffered(
+    body: &[u8],
+    model: &str,
+    tracker: &CostTracker,
+) {
+    let text = match std::str::from_utf8(body) {
+        Ok(t) => t,
+        Err(_) => return,
+    };
+
+    let mut input_tokens: Option<usize> = None;
+    let mut output_tokens: Option<usize> = None;
+    let mut cache_creation_input_tokens: usize = 0;
+    let mut cache_read_input_tokens: usize = 0;
+    let mut saw_message_start = false;
+
+    // Split on double-newline (handles both \n\n and \r\n\r\n)
+    for event_block in text.split("\n\n") {
+        let event_block = event_block.trim();
+        if event_block.is_empty() {
+            continue;
+        }
+
+        let mut event_type = None;
+        let mut event_data = None;
+        for line in event_block.lines() {
+            let line = line.trim_start_matches('\r');
+            if let Some(t) = line.strip_prefix("event: ") {
+                event_type = Some(t);
+            } else if let Some(d) = line.strip_prefix("data: ") {
+                event_data = Some(d);
+            }
+        }
+
+        if let (Some(etype), Some(data)) = (event_type, event_data) {
+            match etype {
+                "message_start" => {
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
+                        if let Some(usage) = json.pointer("/message/usage") {
+                            input_tokens = usage
+                                .get("input_tokens")
+                                .and_then(|v| v.as_u64())
+                                .map(|v| v as usize);
+                            cache_creation_input_tokens = usage
+                                .get("cache_creation_input_tokens")
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0)
+                                as usize;
+                            cache_read_input_tokens = usage
+                                .get("cache_read_input_tokens")
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0)
+                                as usize;
+                            saw_message_start = true;
+                        }
+                    }
+                }
+                "message_delta" => {
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
+                        if let Some(usage) = json.get("usage") {
+                            output_tokens = usage
+                                .get("output_tokens")
+                                .and_then(|v| v.as_u64())
+                                .map(|v| v as usize);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    if saw_message_start {
+        if let (Some(input), Some(output)) = (input_tokens, output_tokens) {
+            let rates = get_rates(model);
+            let cost = calculate_cost(
+                input,
+                output,
+                cache_creation_input_tokens,
+                cache_read_input_tokens,
+                &rates,
+            );
+            let record = UsageRecord {
+                timestamp: OffsetDateTime::now_utc(),
+                model: model.to_string(),
+                input_tokens: input,
+                output_tokens: output,
+                cache_creation_input_tokens,
+                cache_read_input_tokens,
+                cost_usd: cost,
+            };
+            tracing::info!(model, input, output, cost, "Streaming usage recorded");
+            tracker.record(record).await;
+        }
+    } else {
+        tracing::warn!("No message_start found in buffered SSE response");
+    }
 }
 
 /// Processes a streaming SSE response using the "background tee" approach.
@@ -94,6 +206,7 @@ pub fn skim_streaming(
                     }
 
                     if let Ok(text) = std::str::from_utf8(&chunk) {
+                        tracing::debug!(chunk_len = chunk.len(), chunk_text = %text.chars().take(200).collect::<String>(), "SSE chunk received");
                         buffer.push_str(text);
                     }
 
@@ -122,6 +235,10 @@ pub fn skim_streaming(
                             } else if let Some(d) = line.strip_prefix("data: ") {
                                 event_data = Some(d.to_string());
                             }
+                        }
+
+                        if let Some(ref etype) = event_type {
+                            tracing::debug!(event_type = %etype, "SSE event parsed");
                         }
 
                         if let (Some(ref etype), Some(ref data)) = (&event_type, &event_data) {
@@ -174,6 +291,7 @@ pub fn skim_streaming(
         }
 
         // Stream ended — emit UsageRecord if we have complete data
+        tracing::debug!(saw_message_start, ?input_tokens, ?output_tokens, "Stream ended");
         if saw_message_start {
             if let (Some(input), Some(output)) = (input_tokens, output_tokens) {
                 let rates = get_rates(&model);
@@ -212,5 +330,6 @@ pub fn skim_streaming(
     let mut response = Response::new(body);
     *response.status_mut() = parts.status;
     *response.headers_mut() = parts.headers;
+    strip_hop_by_hop(response.headers_mut());
     response
 }

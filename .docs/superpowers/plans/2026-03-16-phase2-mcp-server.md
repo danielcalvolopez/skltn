@@ -1478,6 +1478,17 @@ pub fn read_skeleton_or_full(root: &Path, file: &str, tokenizer: &CoreBPE) -> St
         return McpError::FileNotFound(file.to_string()).to_string();
     }
 
+    // File size limit (10 MB) to prevent OOM
+    const MAX_FILE_SIZE: u64 = 10 * 1024 * 1024;
+    if let Ok(metadata) = std::fs::metadata(&path) {
+        if metadata.len() > MAX_FILE_SIZE {
+            return format!(
+                "File too large: {} ({} bytes, limit is 10 MB)",
+                file, metadata.len()
+            );
+        }
+    }
+
     // Detect language
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
     let backend = match backend_for_extension(ext) {
@@ -1710,6 +1721,17 @@ pub fn read_full_symbol(
 
     if !path.is_file() {
         return McpError::FileNotFound(file.to_string()).to_string();
+    }
+
+    // File size limit (10 MB) to prevent OOM
+    const MAX_FILE_SIZE: u64 = 10 * 1024 * 1024;
+    if let Ok(metadata) = std::fs::metadata(&path) {
+        if metadata.len() > MAX_FILE_SIZE {
+            return format!(
+                "File too large: {} ({} bytes, limit is 10 MB)",
+                file, metadata.len()
+            );
+        }
     }
 
     // Detect language

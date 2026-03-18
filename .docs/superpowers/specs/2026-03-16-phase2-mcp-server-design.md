@@ -145,14 +145,15 @@ tests/
 
 1. Resolve path relative to repo root (with path security check)
 2. If file doesn't exist → content response: `"File not found: {path}"`
-3. Detect language from extension. If unsupported → content response: `"Unsupported language for file: {path}. Supported: .rs, .py, .ts, .js"`
-4. Read file contents
-5. Run `tiktoken-rs` token count on the source
-6. **Budget Guard decision:**
+3. Check file size. If > 10 MB → content response: `"File too large: {path} ({size} bytes, limit is 10 MB)"`
+4. Detect language from extension. If unsupported → content response: `"Unsupported language for file: {path}. Supported: .rs, .py, .ts, .js"`
+5. Read file contents
+6. Run `tiktoken-rs` token count on the source
+7. **Budget Guard decision:**
    - Token count ≤ 2,000 → return the full file contents (no skeletonization needed)
    - Token count > 2,000 → skeletonize via `skltn-core::SkeletonEngine::skeletonize()` and return the skeleton
-7. Run `tiktoken-rs` token count on the output (whether full or skeleton)
-8. Return with metadata header
+8. Run `tiktoken-rs` token count on the output (whether full or skeleton)
+9. Return with metadata header
 
 ### Response Format
 
@@ -227,7 +228,7 @@ pub fn should_skeletonize(source: &str, tokenizer: &CoreBPE) -> BudgetDecision {
 
 ### Behavior
 
-1. Resolve path and read file (same not-found / unsupported handling as `read_skeleton`)
+1. Resolve path and read file (same not-found / unsupported / too-large handling as `read_skeleton`)
 2. Parse the file with tree-sitter via `skltn-core`'s language backend
 3. Walk the AST using the symbol resolution algorithm (see Symbol Resolution section)
 4. For successful matches, run `tiktoken-rs` token count on the extracted source text for the metadata header
@@ -397,6 +398,7 @@ Operational feedback the AI can reason about and self-correct.
 | Directory not found | `list_repo_structure` | `"Directory not found: {path}"` |
 | Path is a file (expected directory) | `list_repo_structure` | `"Path is a file, not a directory: {path}. Use read_skeleton to inspect it."` |
 | Path traversal attempt | All | `"Path is outside the repository root"` |
+| File too large (>10 MB) | `read_skeleton`, `read_full_symbol` | `"File too large: {path} ({size} bytes, limit is 10 MB)"` |
 | Unsupported language | `read_skeleton`, `read_full_symbol` | `"Unsupported language for file: {path}. Supported: .rs, .py, .ts, .js"` |
 | Symbol not found | `read_full_symbol` | `"Symbol '{name}' not found in {path}"` |
 | Ambiguous symbol | `read_full_symbol` | Disambiguation list with parent context and line ranges |
@@ -463,13 +465,127 @@ MCP tool calls can be tested by constructing `rmcp` request objects directly (wi
 
 ---
 
+## Amendment: Cache-Aware Budget Guard (2026-03-17)
+
+### Problem: Prompt Caching Inverts the Cost Equation
+
+Anthropic's prompt caching gives a 90% discount on repeated input tokens. This fundamentally changes the economics of skeletonization:
+
+- A 4,000-token file **cached** costs ~400 effective tokens (full price on first read, 90% off on subsequent reads)
+- The same file **skeletonized** to 1,000 tokens costs 1,000 tokens every time (skeleton is a different token sequence, won't hit the cache from a previous full-file read)
+- **Skeletonizing a cached file is 2.5x more expensive than serving it full**
+
+The current Budget Guard in `budget.rs` is token-count-only with zero cache awareness. It always skeletonizes files >2k tokens, which actively harms cost when those files are already in the provider's prompt cache.
+
+### Solution: Session-Aware Budget Guard with CacheHint
+
+Add an in-memory LRU tracker of files recently served in full. If a file was served full within the current session, serve it full again (it's likely cached by the provider). If it's the first request for a file, apply the existing token threshold logic.
+
+#### CacheHint Enum
+
+```rust
+pub enum CacheHint {
+    /// No prior information — cold start, use token threshold heuristic
+    Unknown,
+    /// File was served full recently in this session — likely cached by provider
+    RecentlyServed,
+    /// Phase 3 integration: obs proxy confirmed cache_read_input_tokens > 0
+    CacheConfirmed,
+    /// Phase 3 integration: obs data is stale (>5min since last cache hit)
+    CacheExpired,
+}
+```
+
+`CacheConfirmed` and `CacheExpired` are **reserved for Phase 3 integration** — they are defined in the enum but not produced by any Phase 2 code. This provides a clean extension point without requiring Phase 2 changes when Phase 3 lands.
+
+#### Updated BudgetDecision Logic
+
+```rust
+pub fn should_skeletonize(
+    source: &str,
+    tokenizer: &CoreBPE,
+    hint: CacheHint,
+) -> BudgetDecision {
+    let token_count = tokenizer.encode_ordinary(source).len();
+
+    match hint {
+        // File is likely cached — serve full regardless of size
+        CacheHint::RecentlyServed | CacheHint::CacheConfirmed => {
+            BudgetDecision::ReturnFull { original_tokens: token_count }
+        }
+        // No cache info or cache expired — fall back to token threshold
+        CacheHint::Unknown | CacheHint::CacheExpired => {
+            if token_count > TOKEN_THRESHOLD {
+                BudgetDecision::Skeletonize { original_tokens: token_count }
+            } else {
+                BudgetDecision::ReturnFull { original_tokens: token_count }
+            }
+        }
+    }
+}
+```
+
+#### Session Tracker
+
+The MCP server gains a lightweight `SessionTracker` that records which files have been served full:
+
+- **Data structure:** `HashMap<PathBuf, Instant>` — maps file path to the timestamp of last full-file serve
+- **On `read_skeleton` returning full content:** Record the file path and current time
+- **On `read_skeleton` query:** Look up the file; if present, produce `CacheHint::RecentlyServed`; if absent, produce `CacheHint::Unknown`
+- **No TTL eviction needed in Phase 2:** The MCP server process lifetime equals the session lifetime. The map is naturally bounded by the number of unique files accessed in a session.
+- **Memory bound:** Even for a 10,000-file repo where every file is accessed, the map costs ~1 MB. No eviction policy needed.
+
+#### Server State Change
+
+The `SkltnServer` struct gains a `session_tracker: SessionTracker` field. This is the **only stateful addition** — the server was previously fully stateless. The tracker is scoped to the process lifetime (one MCP session).
+
+#### `read_skeleton` Response Metadata Update
+
+When a file is served full due to cache hint (rather than being under the token threshold), the metadata header indicates this:
+
+```
+[file: src/engine.rs | language: rust | tokens: 4,821 | full file (cache-aware)]
+```
+
+The `(cache-aware)` suffix tells the AI (and the user inspecting logs) that this file was served full because of caching economics, not because it was small.
+
+#### First-Read Behavior: Skeleton Still Valuable
+
+On the **first** read of a large file (no cache hint), skeletonization remains the correct default:
+- The file isn't cached yet, so full-price applies
+- The skeleton gives the AI a structural overview at reduced cost
+- If the AI needs the full file, it requests it via `read_full_symbol` or a second `read_skeleton` call (which will now be served full via `RecentlyServed` — but note: only if the first call served it full)
+
+**Important nuance:** The first `read_skeleton` call for a large file still returns the skeleton (not full). The `RecentlyServed` hint only applies when the file was previously served **full** (either because it was under the threshold, or because it was served full on a subsequent cache-aware call). The skeleton itself is not tracked as "recently served full" because the skeleton token sequence differs from the full file and wouldn't benefit from the provider's cache.
+
+#### Interaction with `read_full_symbol`
+
+`read_full_symbol` always returns full source text for a specific symbol. It does **not** update the session tracker because:
+- It returns a fragment, not the full file
+- The fragment's token sequence doesn't match the full file's cache entry
+- Tracking fragments would add complexity without cache benefit
+
+#### Expected Cache Accuracy
+
+- **Option A alone (this amendment): ~80%** — covers repeated file reads within a single MCP session
+- **Option A + Phase 3 integration (future): ~98%** — heuristic for cold-start, actual cache data for steady-state
+
+### Migration
+
+This is a **backward-compatible change** to the Budget Guard. The existing behavior (skeletonize >2k tokens) is preserved for first reads. The only behavioral change is: files served full in the current session are served full again on subsequent reads.
+
+No changes to `read_full_symbol` or `list_repo_structure`.
+
+---
+
 ## Out of Scope (Phase 2)
 
 - Token counting observability / cost tracking (Phase 3)
-- Tauri HUD (Phase 4)
+- Web Dashboard (Phase 4)
 - Directory skeletonization in a single tool call (AI skeletons files individually)
 - Fuzzy symbol matching or path correction
-- Caching of directory structure or file contents
+- ~~Caching of directory structure or file contents~~ (Session tracker added for cache-aware Budget Guard — see amendment above)
 - Configuration of the token threshold (it's a constant)
 - Additional languages beyond Phase 1's four
 - HTTP/SSE transport (stdio only)
+- Phase 3 `CacheHint` integration (enum variants defined but not wired)

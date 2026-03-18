@@ -9,7 +9,7 @@
 
 ## Overview
 
-The Observability Layer is a local reverse proxy that sits between any Anthropic API client and `api.anthropic.com`. It transparently forwards all traffic while extracting token usage and cost data from API responses. Usage records are persisted to a JSONL file and broadcast over WebSocket for real-time consumption by Phase 4's Tauri HUD.
+The Observability Layer is a local reverse proxy that sits between any Anthropic API client and `api.anthropic.com`. It transparently forwards all traffic while extracting token usage and cost data from API responses. Usage records are persisted to a JSONL file and broadcast over WebSocket for real-time consumption by Phase 4's web dashboard.
 
 This is Phase 3 of the skltn project. It is **standalone** — no dependency on `skltn-core` (Phase 1) or `skltn-mcp` (Phase 2). The proxy works with any Anthropic API client (Claude Code, Cursor, custom SDK scripts) that supports a `base_url` configuration.
 
@@ -37,6 +37,7 @@ skltn/
 │   └── skltn-obs/              # Binary — Observability proxy (Phase 3, NEW)
 │       ├── Cargo.toml
 │       └── src/
+│           ├── lib.rs          # Library root — pub mod declarations (for integration test imports)
 │           ├── main.rs         # CLI args (clap), server bootstrap
 │           ├── proxy.rs        # Catch-all handler, request forwarding
 │           ├── skim.rs         # Response parsing (streaming + non-streaming)
@@ -65,7 +66,7 @@ skltn/
 Phase 1 (Skeleton Engine) ← standalone
 Phase 2 (MCP Server) ← depends on skltn-core
 Phase 3 (Observability) ← standalone
-Phase 4 (Tauri HUD) ← depends on skltn-obs (WebSocket consumer)
+Phase 4 (Web Dashboard) ← depends on skltn-obs (WebSocket consumer)
 ```
 
 ### CLI Interface
@@ -74,9 +75,11 @@ Phase 4 (Tauri HUD) ← depends on skltn-obs (WebSocket consumer)
 skltn-obs [OPTIONS]
 
 Options:
-  --port <PORT>       Local port to listen on (default: 8080)
-  --upstream <URL>    Anthropic API base URL (default: https://api.anthropic.com)
-  --data-dir <PATH>   Data directory for JSONL persistence (default: ~/.skltn/)
+  --port <PORT>           Local port to listen on (default: 8080)
+  --bind <ADDR>           Bind address (default: 127.0.0.1)
+  --allow-external        Required when --bind is non-loopback (safety gate for API key exposure)
+  --upstream <URL>        Anthropic API base URL (default: https://api.anthropic.com)
+  --data-dir <PATH>       Data directory for JSONL persistence (default: ~/.skltn/)
 ```
 
 **Usage:**
@@ -138,6 +141,14 @@ The `/ws` route is explicitly registered for WebSocket connections. Everything e
 Before forwarding `POST /v1/messages` requests, the proxy deserializes just enough of the request body to extract the `model` field. This is needed for pricing calculation. The original bytes are forwarded unchanged. For non-message endpoints, no body parsing occurs.
 
 If request body parsing fails (malformed JSON, missing `model` field), the request is still forwarded to Anthropic (transparent pass-through is never broken). No `UsageRecord` is generated for that request, and a `tracing::warn!` is emitted. Anthropic will return its own error response for truly malformed requests.
+
+### Security
+
+- **Localhost-only binding:** The proxy binds to `127.0.0.1` by default — never `0.0.0.0`. Binding to a non-loopback address exposes the user's API key in cleartext HTTP to the network. If `--bind` is set to anything other than `127.0.0.1` or `::1`, the proxy **refuses to start** unless `--allow-external` is also passed. When `--allow-external` is used, a prominent startup banner is printed to stderr: `⚠ WARNING: Binding to {addr} — API keys will be transmitted in cleartext HTTP over the network. Only use this on trusted networks.`
+- **Upstream URL validation:** The `--upstream` flag must use HTTPS unless the host is a loopback address (`127.0.0.1`, `::1`, `localhost`). The proxy refuses to start if a non-loopback HTTP upstream is provided. If the upstream host does not contain `anthropic.com`, a `tracing::warn!` is emitted: `"Upstream '{url}' is not an Anthropic endpoint — API key will be sent to this server."` TLS certificate verification on the upstream `reqwest::Client` must remain enabled — no `--insecure` flag.
+- **Request body size limit:** The proxy enforces a 200 MB body size limit via `axum::extract::DefaultBodyLimit` to prevent OOM from malicious or buggy clients.
+- **No header logging:** Request headers (which contain `x-api-key`) must never be logged, even at `DEBUG` or `TRACE` level. Only log the request method, path, and response status.
+- **Model name validation:** The `model` field extracted from request bodies is validated before storage. Only alphanumeric characters, hyphens, dots, and underscores are accepted (regex: `^[a-zA-Z0-9._-]+$`). Invalid model names are replaced with `"unknown"` and a `tracing::warn!` is emitted. This prevents attacker-controlled strings from flowing into the JSONL file and WebSocket broadcast.
 
 ### What the Proxy Does NOT Do
 
@@ -228,7 +239,7 @@ If the upstream connection drops or errors mid-stream (before `message_stop` is 
 
 **Key properties:**
 - Zero added latency — chunks forwarded as received, parsing happens on cloned data
-- Memory-safe — parsed events are removed from the buffer, only unparsed trailing bytes accumulate (typically a few hundred bytes at most)
+- Memory-safe — parsed events are removed from the buffer, only unparsed trailing bytes accumulate (typically a few hundred bytes at most). **The buffer enforces a 10 MB maximum size.** If the buffer exceeds 10 MB without a `\n\n` boundary (indicating a malformed or malicious upstream), the buffer is discarded, a `tracing::warn!` is emitted, and no `UsageRecord` is generated for the request. The stream continues forwarding to the client unchanged.
 - Structurally robust — uses SSE event boundary parsing (`\n\n`), not substring scanning on raw bytes
 
 ---
@@ -255,7 +266,7 @@ pub struct UsageRecord {
 
 ### `CostTracker`
 
-Lives in `axum::State`, wrapped in `Arc<Mutex<CostTracker>>`. The `Mutex` contention is negligible — locked for microseconds to push a record and send on channels.
+Wraps `Arc<Mutex<CostTrackerInner>>` internally (Clone-able, async-aware). Uses `tokio::sync::Mutex` since it's held across `.await` points in the WebSocket handler. Contention is negligible — locked for microseconds to push a record and send on channels.
 
 ```rust
 pub struct CostTracker {
@@ -273,7 +284,7 @@ pub struct CostTracker {
 
 - **File path:** `{data_dir}/usage.jsonl` (default: `~/.skltn/usage.jsonl`)
 - **Writer task:** A dedicated `tokio::spawn` task receives records via `mpsc` and appends to the file using `OpenOptions::new().append(true).create(true)`
-- **Directory creation:** `~/.skltn/` created on startup if missing
+- **Directory creation:** `~/.skltn/` created on startup if missing, with `0o700` permissions (Unix). The JSONL file is created with `0o600` permissions to prevent other users from reading usage data.
 - **Atomic appends:** One line per record, each line is a complete JSON object. Even if the proxy crashes mid-write, previous records remain intact.
 - **Non-blocking:** The HTTP response path never waits on disk I/O. Records are sent to the writer via the async `mpsc` channel.
 - **Graceful shutdown:** On `SIGINT`/`SIGTERM`, the writer task drains any remaining records from the `mpsc` channel before exiting. This prevents the last few records from being lost during clean shutdown.
@@ -337,16 +348,22 @@ pub fn get_rates(model: &str) -> ModelRates {
 ### Cost Calculation
 
 ```rust
-pub fn calculate_cost(record: &UsageRecord, rates: &ModelRates) -> f64 {
-    (record.input_tokens as f64 * rates.input_per_mtok
-        + record.output_tokens as f64 * rates.output_per_mtok
-        + record.cache_creation_input_tokens as f64 * rates.cache_write_per_mtok
-        + record.cache_read_input_tokens as f64 * rates.cache_read_per_mtok)
+pub fn calculate_cost(
+    input_tokens: usize,
+    output_tokens: usize,
+    cache_creation_input_tokens: usize,
+    cache_read_input_tokens: usize,
+    rates: &ModelRates,
+) -> f64 {
+    (input_tokens as f64 * rates.input_per_mtok
+        + output_tokens as f64 * rates.output_per_mtok
+        + cache_creation_input_tokens as f64 * rates.cache_write_per_mtok
+        + cache_read_input_tokens as f64 * rates.cache_read_per_mtok)
         / 1_000_000.0
 }
 ```
 
-Cost is calculated once when the `UsageRecord` is created, stored in `cost_usd`, then persisted and broadcast.
+Cost is calculated once when the `UsageRecord` is created (before construction, since the cost value is needed as a field), stored in `cost_usd`, then persisted and broadcast.
 
 ---
 
@@ -355,6 +372,15 @@ Cost is calculated once when the `UsageRecord` is created, stored in `cost_usd`,
 ### Endpoint
 
 `GET /ws` — upgrades to WebSocket connection.
+
+### Origin Validation
+
+The WebSocket upgrade handler validates the `Origin` header to prevent cross-site WebSocket hijacking. Connections are accepted only when:
+
+- No `Origin` header is present (non-browser clients, e.g., CLI tools)
+- `Origin` starts with `http://localhost:`, `http://127.0.0.1:`, or `http://[::1]:`
+
+All other origins are rejected with HTTP 403. This prevents a malicious website from opening a WebSocket to `ws://localhost:8080/ws` and reading usage data.
 
 ### Protocol
 
@@ -368,24 +394,21 @@ Cost is calculated once when the `UsageRecord` is created, stored in `cost_usd`,
 3. **Live:** Server forwards each new record from the `broadcast` channel as it arrives
 4. On disconnect, the subscription is dropped. No cleanup needed — `broadcast` handles this.
 
-**Critical invariant — replay-to-live handoff:** The `records.clone()` and `broadcast.subscribe()` calls must happen inside the same `Mutex` lock acquisition. This guarantees no gap between the replayed history and the live stream. Because `CostTracker::record()` also acquires the lock to both push to `records` and send on `broadcast`, a record is either in the cloned vector (if it was added before the lock) or will be received via the broadcast subscription (if it's added after). Moving the `subscribe()` call outside the lock would introduce a race where records could be missed.
+**Critical invariant — replay-to-live handoff:** The `records.clone()` and `broadcast.subscribe()` calls must happen inside the same `Mutex` lock acquisition (encapsulated in `CostTracker::snapshot_and_subscribe()`). This guarantees no gap between the replayed history and the live stream. Because `CostTracker::record()` also acquires the lock to both push to `records` and send on `broadcast`, a record is either in the cloned vector (if it was added before the lock) or will be received via the broadcast subscription (if it's added after). Moving the `subscribe()` call outside the lock would introduce a race where records could be missed.
 
 ### Implementation
 
 ```rust
 async fn ws_handler(
     ws: WebSocketUpgrade,
-    State(tracker): State<Arc<Mutex<CostTracker>>>,
+    State(state): State<AppState>,
 ) -> impl IntoResponse {
-    ws.on_upgrade(|socket| handle_ws(socket, tracker))
+    ws.on_upgrade(|socket| handle_ws(socket, state.tracker))
 }
 
-async fn handle_ws(mut socket: WebSocket, tracker: Arc<Mutex<CostTracker>>) {
+async fn handle_ws(mut socket: WebSocket, tracker: CostTracker) {
     // 1. Replay existing records
-    let (records, mut rx) = {
-        let t = tracker.lock().unwrap();
-        (t.records.clone(), t.broadcast.subscribe())
-    };
+    let (records, mut rx) = tracker.snapshot_and_subscribe().await;
     for record in records {
         let msg = serde_json::to_string(&record).unwrap();
         if socket.send(Message::Text(msg)).await.is_err() { return; }
@@ -454,9 +477,28 @@ The SSE parsing logic is the most complex component. Dedicated tests for:
 
 ---
 
+## Future Integration: Cache-Aware MCP Budget Guard (Phase 2 ↔ Phase 3)
+
+Phase 2's MCP server (amendment dated 2026-03-17) defines a `CacheHint` enum with two Phase 3 variants:
+
+- `CacheHint::CacheConfirmed` — obs proxy confirmed `cache_read_input_tokens > 0` for recent requests
+- `CacheHint::CacheExpired` — obs data is stale (>5 min since last cache hit, matching Anthropic's cache TTL)
+
+When Phase 3 is implemented, a future integration task should expose cache hit data from `skltn-obs` to `skltn-mcp`. Possible mechanisms (to be designed when the integration is scoped):
+
+1. **Shared JSONL read** — MCP server reads the last N records from `~/.skltn/usage.jsonl` to check for recent cache hits
+2. **Local HTTP endpoint** — `skltn-obs` exposes a `/cache-status` endpoint that `skltn-mcp` queries
+3. **Shared memory / IPC** — lightweight inter-process communication
+
+This integration would increase Budget Guard cache accuracy from ~80% (session heuristic only) to ~98% (actual cache data from the provider). The design for this integration is deferred until Phase 3 implementation is underway.
+
+**No Phase 3 code changes are required for this integration point.** The `UsageRecord` already contains `cache_read_input_tokens`. The integration is purely a consumer-side concern (Phase 2 reading Phase 3 data).
+
+---
+
 ## Out of Scope (Phase 3)
 
-- Tauri HUD / visualization (Phase 4)
+- Web dashboard / visualization (Phase 4)
 - Historical data analysis or aggregation queries over JSONL
 - Speculative "savings from skeletonization" calculation
 - HTTPS on the local proxy leg (localhost only, plain HTTP)
@@ -465,3 +507,4 @@ The SSE parsing logic is the most complex component. Dedicated tests for:
 - Authentication or access control on the proxy itself
 - HTTP/2 or HTTP/3 on the local leg
 - Configuration file for pricing (hardcoded is sufficient)
+- Cache-aware Budget Guard integration with Phase 2 (deferred — see note above)

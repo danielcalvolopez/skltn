@@ -50,11 +50,19 @@ export const calculateSessionTotals = (
         (acc, record) => ({
             totalCost: acc.totalCost + record.cost_usd,
             totalTokens:
-                acc.totalTokens + record.input_tokens + record.output_tokens,
+                acc.totalTokens +
+                record.input_tokens +
+                record.output_tokens +
+                record.cache_read_input_tokens +
+                record.cache_creation_input_tokens,
             cacheSavings: acc.cacheSavings + calculateCacheSavings(record),
             totalCacheRead:
                 acc.totalCacheRead + record.cache_read_input_tokens,
-            totalInput: acc.totalInput + record.input_tokens,
+            totalInput:
+                acc.totalInput +
+                record.input_tokens +
+                record.cache_read_input_tokens +
+                record.cache_creation_input_tokens,
         }),
         {
             totalCost: 0,

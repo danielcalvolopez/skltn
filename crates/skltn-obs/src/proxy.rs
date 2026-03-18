@@ -65,27 +65,39 @@ pub async fn proxy_handler(
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
+    tracing::debug!(%status, content_type, "Upstream response received");
+
     let is_streaming = content_type.contains("text/event-stream");
 
     if is_streaming {
+        // Buffer the full streaming response — reqwest's bytes_stream() can be empty
+        // when the body was already consumed during HTTP/2 framing.
+        let resp_bytes = upstream_resp.bytes().await.map_err(|e| {
+            tracing::error!("Failed to read streaming response body: {e}");
+            (
+                http::StatusCode::BAD_GATEWAY,
+                "Failed to read upstream response",
+            )
+                .into_response()
+        })?;
+
+        let body_preview = String::from_utf8_lossy(&resp_bytes[..resp_bytes.len().min(500)]);
+        tracing::debug!(body_len = resp_bytes.len(), body = %body_preview, "Buffered streaming response");
+
         let mut parts = http::Response::new(()).into_parts().0;
         parts.status = status;
         parts.headers = resp_headers;
 
-        if let Some(model) = model {
-            Ok(crate::skim::skim_streaming(
-                parts,
-                upstream_resp.bytes_stream(),
-                model,
-                state.tracker.clone(),
-            ))
-        } else {
-            let body = Body::from_stream(upstream_resp.bytes_stream());
-            let mut response = Response::new(body);
-            *response.status_mut() = parts.status;
-            *response.headers_mut() = parts.headers;
-            Ok(response)
+        if let Some(ref model) = model {
+            // Parse SSE events from the buffered body and extract usage
+            crate::skim::skim_streaming_buffered(&resp_bytes, model, &state.tracker).await;
         }
+
+        let mut response = Response::new(Body::from(resp_bytes));
+        *response.status_mut() = parts.status;
+        *response.headers_mut() = parts.headers;
+        crate::skim::strip_hop_by_hop(response.headers_mut());
+        Ok(response)
     } else {
         let resp_bytes = upstream_resp.bytes().await.map_err(|e| {
             tracing::error!("Failed to read upstream response body: {e}");
@@ -106,6 +118,7 @@ pub async fn proxy_handler(
             let mut response = Response::new(Body::from(resp_bytes));
             *response.status_mut() = parts.status;
             *response.headers_mut() = parts.headers;
+            crate::skim::strip_hop_by_hop(response.headers_mut());
             Ok(response)
         }
     }

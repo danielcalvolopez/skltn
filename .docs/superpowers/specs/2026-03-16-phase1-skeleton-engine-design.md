@@ -401,7 +401,7 @@ fn test_rust_skeleton_is_valid_syntax() {
 
 - MCP server integration (Phase 2)
 - Token counting / observability (Phase 3)
-- Tauri HUD (Phase 4)
+- Web Dashboard (Phase 4)
 - Solidity (`.sol`) — deferred from PRD Phase 1; will be added as a standalone `SolidityBackend` in a future phase
 - Other languages beyond the supported four
 - Files without standard extensions (Dockerfile, Makefile, etc.)
