@@ -10,3 +10,12 @@
 
 # OS
 .DS_Store
+
+# Claude
+.claude
+.docs
+.superpowers
+OPTIMISATIONS_V2.md
+
+# Sensitive
+.env.local
