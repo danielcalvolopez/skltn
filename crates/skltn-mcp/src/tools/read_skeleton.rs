@@ -8,6 +8,7 @@ use skltn_core::engine::SkeletonEngine;
 use skltn_core::options::SkeletonOptions;
 
 use crate::budget::{self, BudgetDecision};
+use crate::cache::{self, SkeletonCache};
 use crate::error::McpError;
 use crate::resolve::resolve_safe_path;
 use crate::savings::{SavingsRecord, SavingsWriter};
@@ -32,6 +33,8 @@ pub fn read_skeleton_or_full(
     tokenizer: &CoreBPE,
     tracker: &Arc<Mutex<SessionTracker>>,
     savings_writer: &Option<SavingsWriter>,
+    skeleton_cache: Option<&SkeletonCache>,
+    record: bool,
 ) -> String {
     // Resolve and validate path
     let path = match resolve_safe_path(root, file) {
@@ -70,13 +73,6 @@ pub fn read_skeleton_or_full(
 
     let lang = language_name(ext);
 
-    // Check for parse errors once (used in both branches)
-    let warning = if has_parse_errors(&source, backend.as_ref()) {
-        " | warning: parse errors detected"
-    } else {
-        ""
-    };
-
     // Get cache hint from session tracker
     let hint = tracker.lock().unwrap().hint_for(&path);
 
@@ -112,23 +108,69 @@ pub fn read_skeleton_or_full(
                 });
             }
 
+            if record {
+                if let Some(cache) = skeleton_cache {
+                    cache.record_manifest_entry(file);
+                }
+            }
+
             let cache_tag = if cache_aware { " (cache-aware)" } else { "" };
+            let warning = if has_parse_errors(&source, backend.as_ref()) {
+                " | warning: parse errors detected"
+            } else {
+                ""
+            };
 
             format!(
                 "[file: {file} | language: {lang} | tokens: {original_tokens} | full file{cache_tag}{warning}]\n\n{source}"
             )
         }
         BudgetDecision::Skeletonize { original_tokens } => {
-            // Skeletonized files are NOT recorded in the tracker.
+            // Skeletonized files are NOT recorded in the session tracker.
             // The skeleton token sequence differs from the full file, so it
             // wouldn't benefit from the provider's prompt cache of the full file.
-            let opts = SkeletonOptions::default();
-            let skeleton = match SkeletonEngine::skeletonize(&source, backend.as_ref(), &opts) {
-                Ok(s) => s,
-                Err(e) => return format!("Engine error: {e}"),
+
+            // Check the persistent skeleton cache before doing AST work
+            let mtime = std::fs::metadata(&path)
+                .ok()
+                .map(|m| cache::mtime_secs(&m))
+                .unwrap_or(0);
+
+            let (skeleton, skeleton_tokens, parse_errors) =
+                if let Some(entry) = skeleton_cache.and_then(|c| c.get_with_validation(file, mtime, &source)) {
+                    (entry.skeleton, entry.skeleton_tokens, entry.has_parse_errors)
+                } else {
+                    // Cache miss — skeletonize from scratch
+                    let opts = SkeletonOptions::default();
+                    let skel = match SkeletonEngine::skeletonize(&source, backend.as_ref(), &opts) {
+                        Ok(s) => s,
+                        Err(e) => return format!("Engine error: {e}"),
+                    };
+
+                    let skel_tokens = budget::count_tokens(&skel, tokenizer);
+                    let parse_errors = has_parse_errors(&source, backend.as_ref());
+
+                    // Store in persistent cache
+                    if let Some(cache) = skeleton_cache {
+                        cache.store(file, &crate::cache::CacheEntry {
+                            content_hash: cache::hash_content(&source),
+                            mtime_secs: mtime,
+                            original_tokens,
+                            skeleton_tokens: skel_tokens,
+                            has_parse_errors: parse_errors,
+                            skeleton: skel.clone(),
+                        });
+                    }
+
+                    (skel, skel_tokens, parse_errors)
+                };
+
+            let warning = if parse_errors {
+                " | warning: parse errors detected"
+            } else {
+                ""
             };
 
-            let skeleton_tokens = budget::count_tokens(&skeleton, tokenizer);
             let compression = if original_tokens > 0 {
                 ((1.0 - skeleton_tokens as f64 / original_tokens as f64) * 100.0) as u32
             } else {
@@ -146,6 +188,12 @@ pub fn read_skeleton_or_full(
                     skeleton_tokens,
                     saved_tokens,
                 });
+            }
+
+            if record {
+                if let Some(cache) = skeleton_cache {
+                    cache.record_manifest_entry(file);
+                }
             }
 
             format!(

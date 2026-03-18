@@ -74,6 +74,10 @@ async fn test_server_get_info_has_instructions() {
         instructions.contains("read_full_symbol"),
         "instructions should mention read_full_symbol"
     );
+    assert!(
+        instructions.contains("restore_session"),
+        "instructions should mention restore_session"
+    );
 }
 
 #[tokio::test]
@@ -137,20 +141,34 @@ async fn test_server_returns_none_for_unknown_tool() {
 }
 
 #[tokio::test]
-async fn test_server_has_exactly_three_tools() {
+async fn test_server_registers_restore_session_tool() {
     let dir = tempfile::tempdir().unwrap();
     create_test_repo(dir.path());
     let server = setup_server(dir.path());
 
-    // Verify all three tools are registered and no extras
-    let registered: Vec<&str> = ["list_repo_structure", "read_skeleton", "read_full_symbol"]
-        .iter()
-        .copied()
-        .filter(|name| server.get_tool(name).is_some())
-        .collect();
+    let tool = server
+        .get_tool("restore_session")
+        .expect("restore_session tool should be registered");
+    assert_eq!(tool.name.as_ref(), "restore_session");
+    assert!(tool.description.is_some());
+}
+
+#[tokio::test]
+async fn test_server_has_exactly_four_tools() {
+    let dir = tempfile::tempdir().unwrap();
+    create_test_repo(dir.path());
+    let server = setup_server(dir.path());
+
+    // Verify all four tools are registered and no extras
+    let registered: Vec<&str> =
+        ["list_repo_structure", "read_skeleton", "read_full_symbol", "restore_session"]
+            .iter()
+            .copied()
+            .filter(|name| server.get_tool(name).is_some())
+            .collect();
     assert_eq!(
         registered.len(),
-        3,
-        "exactly 3 tools should be registered"
+        4,
+        "exactly 4 tools should be registered"
     );
 }
