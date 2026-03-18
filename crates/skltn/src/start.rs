@@ -23,7 +23,7 @@ pub fn run(port: u16, no_obs: bool) -> Result<(), String> {
         cmd.env("ANTHROPIC_BASE_URL", format!("http://localhost:{port}"));
     }
 
-    eprintln!("Launching Claude Code...");
+    println!("Launching Claude Code...");
     let err = cmd.exec();
     Err(format!("Failed to launch claude: {err}"))
 }
@@ -32,7 +32,7 @@ fn start_proxy(port: u16) -> Result<(), String> {
     // Check if proxy already running
     if let Some(info) = pid::read() {
         if pid::is_process_alive(info.pid) {
-            eprintln!("Proxy already running on port {} (PID {})", info.port, info.pid);
+            println!("Proxy already running on port {} (PID {})", info.port, info.pid);
             return Ok(());
         }
         // Stale PID file
@@ -54,7 +54,7 @@ fn start_proxy(port: u16) -> Result<(), String> {
         .try_clone()
         .map_err(|e| format!("Failed to clone log file handle: {e}"))?;
 
-    eprintln!("Starting skltn-obs proxy on port {port}...");
+    println!("Starting skltn-obs proxy on port {port}...");
 
     let child = Command::new(&obs_bin)
         .args(["--port", &port.to_string()])
@@ -75,11 +75,11 @@ fn start_proxy(port: u16) -> Result<(), String> {
     let addr = format!("127.0.0.1:{port}");
     loop {
         if TcpStream::connect(&addr).is_ok() {
-            eprintln!("Proxy ready on port {port} (PID {})", pid_info.pid);
+            println!("Proxy ready on port {port} (PID {})", pid_info.pid);
             break;
         }
         if start.elapsed() > Duration::from_secs(3) {
-            eprintln!(
+            println!(
                 "Warning: proxy may not be ready yet (check ~/.skltn/obs.log)"
             );
             break;
@@ -94,7 +94,7 @@ fn register_mcp(cwd: &std::path::Path) -> Result<(), String> {
     let mcp_bin = find_sibling_binary("skltn-mcp")?;
     let cwd_str = cwd.to_string_lossy();
 
-    eprintln!("Registering MCP server for {cwd_str}...");
+    println!("Registering MCP server for {cwd_str}...");
 
     let output = Command::new("claude")
         .args([

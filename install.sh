@@ -3,6 +3,14 @@ set -euo pipefail
 
 REPO="danielcalvolopez/skltn"
 INSTALL_DIR="$HOME/.skltn/bin"
+TMPDIR_CLEANUP=""
+
+cleanup() {
+    if [ -n "$TMPDIR_CLEANUP" ]; then
+        rm -rf "$TMPDIR_CLEANUP"
+    fi
+}
+trap cleanup EXIT
 
 main() {
     echo "Installing skltn..."
@@ -47,15 +55,13 @@ main() {
     url="https://github.com/${REPO}/releases/download/${version}/skltn-${version}-${target}.tar.gz"
 
     # Download and extract
-    local tmpdir
-    tmpdir="$(mktemp -d)"
-    trap 'rm -rf "$tmpdir"' EXIT
+    TMPDIR_CLEANUP="$(mktemp -d)"
 
     echo "  Downloading $url..."
-    curl -fsSL "$url" -o "$tmpdir/skltn.tar.gz"
+    curl -fsSL "$url" -o "$TMPDIR_CLEANUP/skltn.tar.gz"
 
     mkdir -p "$INSTALL_DIR"
-    tar -xzf "$tmpdir/skltn.tar.gz" -C "$INSTALL_DIR"
+    tar -xzf "$TMPDIR_CLEANUP/skltn.tar.gz" -C "$INSTALL_DIR"
     chmod +x "$INSTALL_DIR/skltn" "$INSTALL_DIR/skltn-mcp" "$INSTALL_DIR/skltn-obs"
 
     echo "  Installed to $INSTALL_DIR"
