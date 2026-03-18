@@ -135,3 +135,57 @@ fn test_restore_load_only_changed_skips_unchanged() {
     assert!(output.contains("fn main()"));
     assert!(!output.contains("pub fn hello()"));
 }
+
+#[test]
+fn test_restore_load_respects_token_budget() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    // Create many large files that together exceed 50k tokens
+    for i in 0..30 {
+        let mut source = String::new();
+        for j in 0..100 {
+            source.push_str(&format!(
+                "pub fn func_{i}_{j}(x: i32) -> i32 {{\n    let a = x + 1;\n    let b = a * 2;\n    let c = b - 3;\n    c + {j}\n}}\n\n"
+            ));
+        }
+        fs::write(root.join(format!("mod_{i}.rs")), &source).unwrap();
+    }
+
+    let files: Vec<(&str, &str)> = (0..30)
+        .map(|i| {
+            // Leak is fine in tests
+            let name: &str = Box::leak(format!("mod_{i}.rs").into_boxed_str());
+            (name, "")
+        })
+        .collect();
+
+    let cache = setup_two_sessions(root, &files);
+
+    let output = skltn_mcp::tools::restore_session::restore_session(
+        root, &tokenizer(), &cache, true, false,
+    );
+
+    // Should contain truncation notice
+    assert!(output.contains("omitted due to token budget"));
+    assert!(output.contains("file(s) omitted"));
+}
+
+#[test]
+fn test_restore_with_empty_manifest() {
+    let dir = tempdir().unwrap();
+    let root = dir.path();
+
+    // Session 1: create cache but read nothing (empty manifest won't be written)
+    {
+        let _cache = SkeletonCache::new(root).unwrap();
+    }
+
+    // Session 2
+    let cache = SkeletonCache::new(root).unwrap();
+
+    let output = skltn_mcp::tools::restore_session::restore_session(
+        root, &tokenizer(), &cache, false, false,
+    );
+    assert!(output.contains("No previous session found"));
+}
