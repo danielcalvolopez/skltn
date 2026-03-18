@@ -97,6 +97,23 @@ pub struct ReadFullSymbolParams {
     pub start_line: Option<usize>,
 }
 
+fn default_false() -> bool {
+    false
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct RestoreSessionParams {
+    /// Load full file contents. When false (default), returns a summary table
+    /// with change annotations. When true, returns skeleton/full content for
+    /// each file from the previous session.
+    #[serde(default = "default_false")]
+    pub load: bool,
+    /// Only load files that changed since last session. Only applies when
+    /// load=true. Ignored when load=false (summary always shows all files).
+    #[serde(default = "default_false")]
+    pub only_changed: bool,
+}
+
 // ---------------------------------------------------------------------------
 // SkltnServer
 // ---------------------------------------------------------------------------
@@ -236,6 +253,35 @@ impl SkltnServer {
 
         Ok(CallToolResult::success(vec![Content::text(output)]))
     }
+
+    /// Restore context from the previous session.
+    #[tool(
+        name = "restore_session",
+        description = "Restore context from the previous session. Returns a summary of files read last session with change annotations. Use load=true to load contents, only_changed=true to filter to modified files."
+    )]
+    async fn restore_session(
+        &self,
+        Parameters(params): Parameters<RestoreSessionParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let root = self.root.clone();
+        let tokenizer = Arc::clone(&self.tokenizer);
+        let skeleton_cache = Arc::clone(&self.skeleton_cache);
+        let load = params.load;
+        let only_changed = params.only_changed;
+
+        let output = tokio::task::spawn_blocking(move || {
+            match skeleton_cache.as_ref() {
+                Some(c) => {
+                    restore_session::restore_session(&root, &tokenizer, c, load, only_changed)
+                }
+                None => "Session manifest unavailable (cache not initialized).".to_string(),
+            }
+        })
+        .await
+        .map_err(|e| ErrorData::internal_error(format!("Internal error: {e}"), None))?;
+
+        Ok(CallToolResult::success(vec![Content::text(output)]))
+    }
 }
 
 #[tool_handler]
@@ -244,7 +290,8 @@ impl ServerHandler for SkltnServer {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
             .with_instructions(
                 "Skeleton (skltn) MCP server. Navigate codebases efficiently: \
-                 list_repo_structure -> read_skeleton -> read_full_symbol."
+                 list_repo_structure -> read_skeleton -> read_full_symbol. \
+                 Use restore_session to reload context from a previous session."
                     .to_string(),
             )
     }
