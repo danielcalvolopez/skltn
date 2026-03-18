@@ -13,6 +13,7 @@ use serde::Deserialize;
 use skltn_core::backend::LanguageBackend;
 use tiktoken_rs::CoreBPE;
 
+use crate::savings::{DrilldownWriter, SavingsWriter};
 use crate::session::SessionTracker;
 
 // ---------------------------------------------------------------------------
@@ -101,16 +102,28 @@ pub struct SkltnServer {
     root: PathBuf,
     tokenizer: Arc<CoreBPE>,
     session_tracker: Arc<Mutex<SessionTracker>>,
+    savings_writer: Arc<Option<SavingsWriter>>,
+    drilldown_writer: Arc<Option<DrilldownWriter>>,
     tool_router: ToolRouter<Self>,
 }
 
 impl SkltnServer {
     pub fn new(root: PathBuf, tokenizer: CoreBPE) -> Self {
         let tool_router = Self::tool_router();
+        let savings_writer = SavingsWriter::new();
+        if savings_writer.is_none() {
+            tracing::warn!("Savings writer unavailable — skeletonization savings will not be recorded");
+        }
+        let drilldown_writer = DrilldownWriter::new();
+        if drilldown_writer.is_none() {
+            tracing::warn!("Drilldown writer unavailable — drilldown records will not be recorded");
+        }
         Self {
             root,
             tokenizer: Arc::new(tokenizer),
             session_tracker: Arc::new(Mutex::new(SessionTracker::new())),
+            savings_writer: Arc::new(savings_writer),
+            drilldown_writer: Arc::new(drilldown_writer),
             tool_router,
         }
     }
@@ -174,9 +187,10 @@ impl SkltnServer {
         let file = params.file;
         let tokenizer = Arc::clone(&self.tokenizer);
         let tracker = Arc::clone(&self.session_tracker);
+        let savings_writer = Arc::clone(&self.savings_writer);
 
         let output = tokio::task::spawn_blocking(move || {
-            read_skeleton::read_skeleton_or_full(&root, &file, &tokenizer, &tracker)
+            read_skeleton::read_skeleton_or_full(&root, &file, &tokenizer, &tracker, &savings_writer)
         })
         .await
         .map_err(|e| ErrorData::internal_error(format!("Internal error: {e}"), None))?;
@@ -199,9 +213,10 @@ impl SkltnServer {
         let symbol = params.symbol;
         let start_line = params.start_line;
         let tokenizer = Arc::clone(&self.tokenizer);
+        let drilldown_writer = Arc::clone(&self.drilldown_writer);
 
         let output = tokio::task::spawn_blocking(move || {
-            read_full_symbol::read_full_symbol(&root, &file, &symbol, start_line, &tokenizer)
+            read_full_symbol::read_full_symbol(&root, &file, &symbol, start_line, &tokenizer, &drilldown_writer)
         })
         .await
         .map_err(|e| ErrorData::internal_error(format!("Internal error: {e}"), None))?;

@@ -8,7 +8,9 @@ use axum::Router;
 use tokio::net::TcpListener;
 use tokio::signal;
 
+use skltn_obs::drilldown::DrilldownTracker;
 use skltn_obs::proxy::AppState;
+use skltn_obs::savings::SavingsTracker;
 use skltn_obs::tracker::CostTracker;
 use skltn_obs::{dashboard, proxy, ws};
 
@@ -83,7 +85,9 @@ async fn main() {
         "Starting skltn-obs proxy"
     );
 
-    let tracker = CostTracker::new(cli.data_dir).await;
+    let tracker = CostTracker::new(cli.data_dir.clone()).await;
+    let drilldown_tracker = DrilldownTracker::new(cli.data_dir.clone()).await;
+    let savings_tracker = SavingsTracker::new(cli.data_dir).await;
 
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
@@ -96,6 +100,8 @@ async fn main() {
         client,
         upstream: cli.upstream,
         tracker: tracker.clone(),
+        savings_tracker,
+        drilldown_tracker,
     };
 
     let app = Router::new()

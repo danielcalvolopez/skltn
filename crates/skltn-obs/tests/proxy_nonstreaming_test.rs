@@ -1,6 +1,7 @@
 use axum::routing::{any, post};
 use axum::Router;
 use skltn_obs::proxy::{proxy_handler, AppState};
+use skltn_obs::savings::SavingsTracker;
 use skltn_obs::tracker::CostTracker;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
@@ -50,10 +51,14 @@ async fn start_proxy(upstream_addr: SocketAddr) -> (SocketAddr, CostTracker) {
         .build()
         .unwrap();
 
+    let savings_tracker = SavingsTracker::new(dir.path().to_path_buf()).await;
+    let drilldown_tracker = skltn_obs::drilldown::DrilldownTracker::new(dir.path().to_path_buf()).await;
     let state = AppState {
         client,
         upstream: format!("http://{upstream_addr}"),
         tracker: tracker.clone(),
+        savings_tracker,
+        drilldown_tracker,
     };
 
     let app = Router::new().fallback(proxy_handler).with_state(state);

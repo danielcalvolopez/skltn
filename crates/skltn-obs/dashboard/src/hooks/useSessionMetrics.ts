@@ -1,32 +1,34 @@
 import { useMemo } from 'react';
-import type { UsageRecord, ModelCost } from '../types/usage';
-import { calculateSessionTotals, calculateModelBreakdown } from '../types/usage';
+import type { UsageRecord, SavingsRecord, DrilldownRecord, ModelCost, SkltnSavings, ContextMetrics } from '../types/usage';
+import { calculateSessionTotals, calculateModelBreakdown, calculateSkltnSavings, calculateContextMetrics } from '../types/usage';
 
-interface SessionMetrics {
+export interface SessionMetrics {
     totalCost: number;
-    cacheSavings: number;
     requestCount: number;
     totalTokens: number;
-    cacheHitRatio: number;
+    skltnSavings: SkltnSavings;
     modelBreakdown: ModelCost[];
+    contextMetrics: ContextMetrics;
 }
 
-export function useSessionMetrics(records: UsageRecord[]): SessionMetrics {
+export function useSessionMetrics(
+    records: UsageRecord[],
+    savingsRecords: SavingsRecord[],
+    drilldownRecords: DrilldownRecord[],
+): SessionMetrics {
     return useMemo(() => {
         const totals = calculateSessionTotals(records);
         const modelBreakdown = calculateModelBreakdown(records);
-        const cacheHitRatio =
-            totals.totalInput > 0
-                ? totals.totalCacheRead / totals.totalInput
-                : 0;
+        const skltnSavings = calculateSkltnSavings(savingsRecords, records);
+        const contextMetrics = calculateContextMetrics(savingsRecords, drilldownRecords, records);
 
         return {
             totalCost: totals.totalCost,
-            cacheSavings: totals.cacheSavings,
             requestCount: records.length,
             totalTokens: totals.totalTokens,
-            cacheHitRatio,
+            skltnSavings,
             modelBreakdown,
+            contextMetrics,
         };
-    }, [records]);
+    }, [records, savingsRecords, drilldownRecords]);
 }

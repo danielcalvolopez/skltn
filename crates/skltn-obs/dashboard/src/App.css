@@ -57,12 +57,43 @@ body {
     flex: 1;
     display: grid;
     grid-template-columns: 1fr 200px;
-    grid-template-rows: auto 1fr auto;
+    grid-template-rows: auto auto 1fr auto;
     grid-template-areas:
+        "hero    hero"
         "header  header"
         "main    sidebar"
         "footer  footer";
     min-height: 0;
+}
+
+.dashboard-hero {
+    grid-area: hero;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 24px 16px 16px;
+    border-bottom: 1px solid #222;
+}
+
+.exploration-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.hero-value {
+    font-size: 56px;
+    font-weight: 700;
+    color: #00ff88;
+    line-height: 1;
+    text-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+}
+
+.hero-subtitle {
+    font-size: 11px;
+    color: #555;
+    letter-spacing: 1px;
 }
 
 .dashboard-header {
@@ -135,13 +166,25 @@ body {
     min-height: 200px;
 }
 
-/* --- Cache Ring --- */
+/* --- Cost Summary --- */
 
-.cache-ring {
+.cost-summary {
     display: flex;
     flex-direction: column;
-    align-items: center;
     gap: 8px;
+    padding-top: 12px;
+    border-top: 1px solid #222;
+}
+
+.metric-value.cost {
+    font-size: 16px;
+    color: #666;
+}
+
+.metric-ref {
+    font-size: 11px;
+    color: #444;
+    font-weight: 400;
 }
 
 /* --- Model Breakdown --- */

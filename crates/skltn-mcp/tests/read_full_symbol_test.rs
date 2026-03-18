@@ -19,7 +19,7 @@ pub fn farewell() -> &'static str {
     fs::write(root.join("lib.rs"), source).unwrap();
 
     let tok = tokenizer();
-    let output = skltn_mcp::tools::read_full_symbol::read_full_symbol(root, "lib.rs", "greet", None, &tok);
+    let output = skltn_mcp::tools::read_full_symbol::read_full_symbol(root, "lib.rs", "greet", None, &tok, &None);
     assert!(output.contains("[symbol: greet"));
     assert!(output.contains("pub fn greet(name: &str) -> String"));
     assert!(output.contains("format!(\"Hello, {name}!\")"));
@@ -43,7 +43,7 @@ impl B {
     fs::write(root.join("lib.rs"), source).unwrap();
 
     let tok = tokenizer();
-    let output = skltn_mcp::tools::read_full_symbol::read_full_symbol(root, "lib.rs", "new", None, &tok);
+    let output = skltn_mcp::tools::read_full_symbol::read_full_symbol(root, "lib.rs", "new", None, &tok, &None);
     assert!(output.contains("Multiple matches for 'new'"));
     assert!(output.contains("impl A"));
     assert!(output.contains("impl B"));
@@ -68,7 +68,7 @@ impl B {
     fs::write(root.join("lib.rs"), source).unwrap();
 
     let tok = tokenizer();
-    let output = skltn_mcp::tools::read_full_symbol::read_full_symbol(root, "lib.rs", "new", Some(9), &tok);
+    let output = skltn_mcp::tools::read_full_symbol::read_full_symbol(root, "lib.rs", "new", Some(9), &tok, &None);
     assert!(output.contains("[symbol: new"));
     assert!(output.contains("impl B"));
 }
@@ -80,7 +80,7 @@ fn test_not_found() {
     fs::write(root.join("lib.rs"), "fn hello() {}").unwrap();
 
     let tok = tokenizer();
-    let output = skltn_mcp::tools::read_full_symbol::read_full_symbol(root, "lib.rs", "nonexistent", None, &tok);
+    let output = skltn_mcp::tools::read_full_symbol::read_full_symbol(root, "lib.rs", "nonexistent", None, &tok, &None);
     assert!(output.contains("Symbol 'nonexistent' not found in lib.rs"));
 }
 
@@ -88,7 +88,7 @@ fn test_not_found() {
 fn test_file_not_found() {
     let dir = tempfile::tempdir().unwrap();
     let tok = tokenizer();
-    let output = skltn_mcp::tools::read_full_symbol::read_full_symbol(dir.path(), "nope.rs", "foo", None, &tok);
+    let output = skltn_mcp::tools::read_full_symbol::read_full_symbol(dir.path(), "nope.rs", "foo", None, &tok, &None);
     assert!(output.contains("File not found: nope.rs"));
 }
 
@@ -104,7 +104,7 @@ fn test_data_node_struct_resolved() {
     fs::write(root.join("config.rs"), source).unwrap();
 
     let tok = tokenizer();
-    let output = skltn_mcp::tools::read_full_symbol::read_full_symbol(root, "config.rs", "Config", None, &tok);
+    let output = skltn_mcp::tools::read_full_symbol::read_full_symbol(root, "config.rs", "Config", None, &tok, &None);
     assert!(output.contains("[symbol: Config"));
     assert!(output.contains("pub host: String"));
 }

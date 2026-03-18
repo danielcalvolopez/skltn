@@ -3,6 +3,8 @@ use axum::extract::{Request, State};
 use axum::response::{IntoResponse, Response};
 use http::header::{HOST, TRANSFER_ENCODING};
 
+use crate::drilldown::DrilldownTracker;
+use crate::savings::SavingsTracker;
 use crate::skim::skim_nonstreaming;
 use crate::tracker::CostTracker;
 
@@ -11,6 +13,8 @@ pub struct AppState {
     pub client: reqwest::Client,
     pub upstream: String,
     pub tracker: CostTracker,
+    pub savings_tracker: SavingsTracker,
+    pub drilldown_tracker: DrilldownTracker,
 }
 
 /// Catch-all proxy handler. Forwards all requests to the upstream Anthropic API.

@@ -20,7 +20,7 @@ fn test_small_file_returned_full() {
 
     let tok = tokenizer();
     let output =
-        skltn_mcp::tools::read_skeleton::read_skeleton_or_full(root, "main.rs", &tok, &new_tracker());
+        skltn_mcp::tools::read_skeleton::read_skeleton_or_full(root, "main.rs", &tok, &new_tracker(), &None);
 
     assert!(output.contains("[file: main.rs"));
     assert!(output.contains("full file"));
@@ -42,7 +42,7 @@ fn test_large_file_returned_skeletonized() {
 
     let tok = tokenizer();
     let output =
-        skltn_mcp::tools::read_skeleton::read_skeleton_or_full(root, "big.rs", &tok, &new_tracker());
+        skltn_mcp::tools::read_skeleton::read_skeleton_or_full(root, "big.rs", &tok, &new_tracker(), &None);
 
     assert!(output.contains("[file: big.rs"));
     assert!(output.contains("skeleton:"));
@@ -55,7 +55,7 @@ fn test_file_not_found() {
     let dir = tempfile::tempdir().unwrap();
     let tok = tokenizer();
     let output =
-        skltn_mcp::tools::read_skeleton::read_skeleton_or_full(dir.path(), "nope.rs", &tok, &new_tracker());
+        skltn_mcp::tools::read_skeleton::read_skeleton_or_full(dir.path(), "nope.rs", &tok, &new_tracker(), &None);
     assert!(output.contains("File not found: nope.rs"));
 }
 
@@ -65,7 +65,7 @@ fn test_unsupported_language() {
     fs::write(dir.path().join("readme.md"), "# Hello").unwrap();
     let tok = tokenizer();
     let output =
-        skltn_mcp::tools::read_skeleton::read_skeleton_or_full(dir.path(), "readme.md", &tok, &new_tracker());
+        skltn_mcp::tools::read_skeleton::read_skeleton_or_full(dir.path(), "readme.md", &tok, &new_tracker(), &None);
     assert!(output.contains("Unsupported language"));
 }
 
@@ -78,6 +78,7 @@ fn test_path_traversal_blocked() {
         "../../../etc/passwd",
         &tok,
         &new_tracker(),
+        &None,
     );
     assert!(
         output.contains("Path is outside the repository root")
@@ -104,13 +105,13 @@ fn test_large_file_skeletonized_twice_without_full_serve() {
 
     // First read: should skeletonize (no cache hint)
     let output1 =
-        skltn_mcp::tools::read_skeleton::read_skeleton_or_full(root, "big.rs", &tok, &tracker);
+        skltn_mcp::tools::read_skeleton::read_skeleton_or_full(root, "big.rs", &tok, &tracker, &None);
     assert!(output1.contains("skeleton:"), "First read should skeletonize");
 
     // Second read: should ALSO skeletonize — skeletonized files are NOT
     // recorded in the tracker, so there's no RecentlyServed hint
     let output2 =
-        skltn_mcp::tools::read_skeleton::read_skeleton_or_full(root, "big.rs", &tok, &tracker);
+        skltn_mcp::tools::read_skeleton::read_skeleton_or_full(root, "big.rs", &tok, &tracker, &None);
     assert!(output2.contains("skeleton:"), "Second read should also skeletonize");
     assert!(!output2.contains("cache-aware"), "No cache-aware tag without prior full serve");
 }
@@ -129,7 +130,7 @@ fn test_small_file_served_full_then_large_version_served_full_cache_aware() {
 
     // First read: small file returned full (under threshold), recorded in tracker
     let output1 =
-        skltn_mcp::tools::read_skeleton::read_skeleton_or_full(root, "growing.rs", &tok, &tracker);
+        skltn_mcp::tools::read_skeleton::read_skeleton_or_full(root, "growing.rs", &tok, &tracker, &None);
     assert!(output1.contains("full file"));
     assert!(!output1.contains("cache-aware"));
 
@@ -145,7 +146,7 @@ fn test_small_file_served_full_then_large_version_served_full_cache_aware() {
     // Second read: file is now large, but tracker has a RecentlyServed hint
     // from the first read — serves full with cache-aware tag
     let output2 =
-        skltn_mcp::tools::read_skeleton::read_skeleton_or_full(root, "growing.rs", &tok, &tracker);
+        skltn_mcp::tools::read_skeleton::read_skeleton_or_full(root, "growing.rs", &tok, &tracker, &None);
     assert!(
         output2.contains("full file (cache-aware)"),
         "Should serve full with cache-aware tag due to prior full serve"
@@ -164,7 +165,7 @@ fn test_small_file_not_tagged_cache_aware() {
 
     // First read: small file returned full (under threshold)
     let output1 =
-        skltn_mcp::tools::read_skeleton::read_skeleton_or_full(root, "small.rs", &tok, &tracker);
+        skltn_mcp::tools::read_skeleton::read_skeleton_or_full(root, "small.rs", &tok, &tracker, &None);
     assert!(output1.contains("full file"));
     assert!(!output1.contains("cache-aware"), "First read should not be cache-aware");
 
@@ -172,7 +173,7 @@ fn test_small_file_not_tagged_cache_aware() {
     // cache-aware tag only appears when the hint CHANGED the decision.
     // Since this file is still small, it would be full anyway — no tag.
     let output2 =
-        skltn_mcp::tools::read_skeleton::read_skeleton_or_full(root, "small.rs", &tok, &tracker);
+        skltn_mcp::tools::read_skeleton::read_skeleton_or_full(root, "small.rs", &tok, &tracker, &None);
     assert!(output2.contains("full file"));
     assert!(!output2.contains("cache-aware"), "Small file should never get cache-aware tag");
 }
@@ -197,11 +198,11 @@ fn test_read_full_symbol_does_not_update_tracker() {
 
     // Call read_full_symbol — this should NOT update the tracker
     let _symbol_output =
-        skltn_mcp::tools::read_full_symbol::read_full_symbol(root, "big.rs", "target_symbol", None, &tok);
+        skltn_mcp::tools::read_full_symbol::read_full_symbol(root, "big.rs", "target_symbol", None, &tok, &None);
 
     // Now call read_skeleton — should still skeletonize (tracker not updated by read_full_symbol)
     let skeleton_output =
-        skltn_mcp::tools::read_skeleton::read_skeleton_or_full(root, "big.rs", &tok, &tracker);
+        skltn_mcp::tools::read_skeleton::read_skeleton_or_full(root, "big.rs", &tok, &tracker, &None);
     assert!(
         skeleton_output.contains("skeleton:"),
         "read_full_symbol should not cause read_skeleton to serve full"
