@@ -160,6 +160,7 @@ export interface ContextMetrics {
     contextDensity: number;
     drilldownCount: number;
     contextLimit: number;
+    skeletonTokens: number;
 }
 
 export const calculateContextMetrics = (
@@ -201,5 +202,6 @@ export const calculateContextMetrics = (
         contextDensity,
         drilldownCount: drilldownRecords.length,
         contextLimit,
+        skeletonTokens,
     };
 };

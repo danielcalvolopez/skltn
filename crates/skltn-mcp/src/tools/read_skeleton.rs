@@ -100,6 +100,18 @@ pub fn read_skeleton_or_full(
             // skeletonization of the now-larger file.
             tracker.lock().unwrap().record_full(&path);
 
+            // Record savings (saved_tokens = 0) so the dashboard counts this file
+            if let Some(writer) = savings_writer.as_ref() {
+                writer.record(SavingsRecord {
+                    timestamp: OffsetDateTime::now_utc(),
+                    file: file.to_string(),
+                    language: lang.to_string(),
+                    original_tokens,
+                    skeleton_tokens: original_tokens,
+                    saved_tokens: 0,
+                });
+            }
+
             let cache_tag = if cache_aware { " (cache-aware)" } else { "" };
 
             format!(

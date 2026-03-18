@@ -31,11 +31,12 @@ export function MetricsBar({ contextMetrics, totalTokens }: MetricsBarProps) {
                 <span className="metric-value">{contextMetrics.drilldownCount}</span>
             </div>
             <div className="metric">
-                <span className="metric-label">TOKENS USED</span>
-                <span className="metric-value">
-                    {formatTokens(totalTokens)}
-                    <span className="metric-ref"> / {formatTokens(contextMetrics.contextLimit)}</span>
-                </span>
+                <span className="metric-label">API TOKENS</span>
+                <span className="metric-value">{formatTokens(totalTokens)}</span>
+            </div>
+            <div className="metric">
+                <span className="metric-label">SKELETON TOKENS</span>
+                <span className="metric-value">{formatTokens(contextMetrics.skeletonTokens)}</span>
             </div>
         </div>
     );
