@@ -1,6 +1,7 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+use skltn_mcp::cache::SkeletonCache;
 use skltn_mcp::session::SessionTracker;
 
 fn main() {
@@ -240,5 +241,82 @@ fn main() {
     );
     println!("PASS: cache-aware serving works\n");
 
-    println!("=== ALL 13 SMOKE TESTS PASSED ===");
+    // --- Test 14: restore_session with no previous session ---
+    println!("--- TEST 14: restore_session (no previous session) ---");
+    {
+        let cache = SkeletonCache::new(&root).expect("cache should init");
+        let result = skltn_mcp::tools::restore_session::restore_session(
+            &root, &tokenizer, &cache, false, false,
+        );
+        println!("{}", result);
+        // On first run there's no previous manifest; on subsequent runs there will be one.
+        // Either outcome is valid for a smoke test — just verify it doesn't panic.
+        println!("PASS: restore_session handles current state without panic\n");
+    }
+
+    // --- Test 15: restore_session after manifest recording ---
+    println!("--- TEST 15: restore_session (simulate session with manifest) ---");
+    {
+        // Session 1: read some files with manifest recording
+        let cache1 = SkeletonCache::new(&root).expect("cache should init");
+        let s1_tracker = Arc::new(Mutex::new(SessionTracker::new()));
+        skltn_mcp::tools::read_skeleton::read_skeleton_or_full(
+            &root,
+            "crates/skltn-core/src/options.rs",
+            &tokenizer,
+            &s1_tracker,
+            &None,
+            Some(&cache1),
+            true,
+        );
+        skltn_mcp::tools::read_skeleton::read_skeleton_or_full(
+            &root,
+            "crates/skltn-mcp/src/resolve.rs",
+            &tokenizer,
+            &s1_tracker,
+            &None,
+            Some(&cache1),
+            true,
+        );
+        cache1.force_flush_manifest();
+
+        // Verify manifest was written
+        let manifest = cache1.load_current_manifest().expect("manifest should exist after flush");
+        assert!(
+            manifest.files.contains(&"crates/skltn-core/src/options.rs".to_string()),
+            "Manifest should contain options.rs"
+        );
+        assert!(
+            manifest.files.contains(&"crates/skltn-mcp/src/resolve.rs".to_string()),
+            "Manifest should contain resolve.rs"
+        );
+        println!("Session 1: recorded {} files in manifest", manifest.files.len());
+
+        // Session 2: restore_session should see session 1's files
+        let cache2 = SkeletonCache::new(&root).expect("cache should init");
+
+        // TOC mode
+        let toc = skltn_mcp::tools::restore_session::restore_session(
+            &root, &tokenizer, &cache2, false, false,
+        );
+        println!("TOC output:\n{}", toc);
+        assert!(toc.contains("options.rs"), "TOC should list options.rs");
+        assert!(toc.contains("resolve.rs"), "TOC should list resolve.rs");
+        assert!(toc.contains("unchanged"), "Files should be unchanged");
+        println!("PASS: TOC mode shows previous session files\n");
+
+        // Load mode
+        let loaded = skltn_mcp::tools::restore_session::restore_session(
+            &root, &tokenizer, &cache2, true, false,
+        );
+        let first_line = loaded.lines().next().unwrap_or("");
+        println!("Load output (first line): {}", first_line);
+        assert!(
+            loaded.contains("[file: crates/skltn-core/src/options.rs"),
+            "Load mode should contain file header for options.rs"
+        );
+        println!("PASS: load mode returns file content from previous session\n");
+    }
+
+    println!("=== ALL 15 SMOKE TESTS PASSED ===");
 }
