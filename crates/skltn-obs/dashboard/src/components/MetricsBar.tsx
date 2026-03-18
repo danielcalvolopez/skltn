@@ -1,7 +1,7 @@
+import type { ContextMetrics } from '../types/usage';
+
 interface MetricsBarProps {
-    totalCost: number;
-    cacheSavings: number;
-    requestCount: number;
+    contextMetrics: ContextMetrics;
     totalTokens: number;
 }
 
@@ -11,32 +11,30 @@ function formatTokens(n: number): string {
     return n.toLocaleString();
 }
 
-export function MetricsBar({
-    totalCost,
-    cacheSavings,
-    requestCount,
-    totalTokens,
-}: MetricsBarProps) {
+export function MetricsBar({ contextMetrics, totalTokens }: MetricsBarProps) {
+    const densityDisplay = contextMetrics.filesExplored > 0
+        ? `${Math.round(contextMetrics.contextDensity * 100)}%`
+        : '\u2014';
+
     return (
         <div className="metrics-bar">
             <div className="metric">
-                <span className="metric-label">SESSION COST</span>
-                <span className="metric-value">${totalCost.toFixed(2)}</span>
+                <span className="metric-label">FILES EXPLORED</span>
+                <span className="metric-value">{contextMetrics.filesExplored}</span>
             </div>
             <div className="metric">
-                <span className="metric-label">CACHE SAVINGS</span>
-                <span className="metric-value">${cacheSavings.toFixed(2)}</span>
+                <span className="metric-label">CONTEXT DENSITY</span>
+                <span className="metric-value">{densityDisplay}</span>
             </div>
             <div className="metric">
-                <span className="metric-label">REQUESTS</span>
-                <span className="metric-value">
-                    {requestCount.toLocaleString()}
-                </span>
+                <span className="metric-label">DRILLDOWNS</span>
+                <span className="metric-value">{contextMetrics.drilldownCount}</span>
             </div>
             <div className="metric">
-                <span className="metric-label">TOKENS</span>
+                <span className="metric-label">TOKENS USED</span>
                 <span className="metric-value">
                     {formatTokens(totalTokens)}
+                    <span className="metric-ref"> / {formatTokens(contextMetrics.contextLimit)}</span>
                 </span>
             </div>
         </div>

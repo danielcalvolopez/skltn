@@ -1,8 +1,8 @@
-interface CacheRingProps {
+interface SavingsRingProps {
     ratio: number;
 }
 
-export function CacheRing({ ratio }: CacheRingProps) {
+export function SavingsRing({ ratio }: SavingsRingProps) {
     const size = 120;
     const strokeWidth = 6;
     const radius = (size - strokeWidth) / 2;
@@ -11,13 +11,13 @@ export function CacheRing({ ratio }: CacheRingProps) {
     const percentage = Math.round(ratio * 100);
 
     return (
-        <div className="cache-ring">
-            <span className="metric-label">CACHE HIT RATIO</span>
+        <div className="savings-ring">
+            <span className="metric-label">TOKENS SAVED</span>
             <svg
                 width={size}
                 height={size}
                 viewBox={`0 0 ${size} ${size}`}
-                aria-label={`Cache hit ratio: ${percentage}%`}
+                aria-label={`Tokens saved by skeletonization: ${percentage}%`}
                 role="img"
             >
                 <circle

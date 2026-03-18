@@ -1,10 +1,12 @@
 use std::path::Path;
 
 use tiktoken_rs::CoreBPE;
+use time::OffsetDateTime;
 
 use crate::budget;
 use crate::error::McpError;
 use crate::resolve::{resolve_safe_path, resolve_symbol, ResolveResult};
+use crate::savings::{DrilldownRecord, DrilldownWriter};
 
 use super::{backend_for_extension, has_parse_errors};
 
@@ -25,6 +27,7 @@ pub fn read_full_symbol(
     symbol: &str,
     start_line: Option<usize>,
     tokenizer: &CoreBPE,
+    drilldown_writer: &Option<DrilldownWriter>,
 ) -> String {
     // Resolve path
     let path = match resolve_safe_path(root, file) {
@@ -73,6 +76,14 @@ pub fn read_full_symbol(
             match_info,
         } => {
             let tokens = budget::count_tokens(&source_text, tokenizer);
+            if let Some(writer) = drilldown_writer.as_ref() {
+                writer.record(DrilldownRecord {
+                    timestamp: OffsetDateTime::now_utc(),
+                    file: file.to_string(),
+                    symbol: match_info.name.clone(),
+                    tokens,
+                });
+            }
             let context_suffix = match &match_info.parent_context {
                 Some(ctx) => format!(" | context: {ctx}"),
                 None => String::new(),

@@ -2,6 +2,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use tiktoken_rs::CoreBPE;
+use time::OffsetDateTime;
 
 use skltn_core::engine::SkeletonEngine;
 use skltn_core::options::SkeletonOptions;
@@ -9,6 +10,7 @@ use skltn_core::options::SkeletonOptions;
 use crate::budget::{self, BudgetDecision};
 use crate::error::McpError;
 use crate::resolve::resolve_safe_path;
+use crate::savings::{SavingsRecord, SavingsWriter};
 use crate::session::SessionTracker;
 
 use super::{backend_for_extension, has_parse_errors, language_name};
@@ -29,6 +31,7 @@ pub fn read_skeleton_or_full(
     file: &str,
     tokenizer: &CoreBPE,
     tracker: &Arc<Mutex<SessionTracker>>,
+    savings_writer: &Option<SavingsWriter>,
 ) -> String {
     // Resolve and validate path
     let path = match resolve_safe_path(root, file) {
@@ -119,6 +122,19 @@ pub fn read_skeleton_or_full(
             } else {
                 0
             };
+
+            // Record savings for the dashboard
+            if let Some(writer) = savings_writer.as_ref() {
+                let saved_tokens = original_tokens.saturating_sub(skeleton_tokens);
+                writer.record(SavingsRecord {
+                    timestamp: OffsetDateTime::now_utc(),
+                    file: file.to_string(),
+                    language: lang.to_string(),
+                    original_tokens,
+                    skeleton_tokens,
+                    saved_tokens,
+                });
+            }
 
             format!(
                 "[file: {file} | language: {lang} | original: {original_tokens} tokens | skeleton: {skeleton_tokens} tokens | compression: {compression}%{warning}]\n\n{skeleton}"

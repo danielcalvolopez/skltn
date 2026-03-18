@@ -29,6 +29,7 @@ regex = "1"
 url = "2"
 tokio-stream = "0.1"
 dirs = "6"
+notify = "7"
 rust-embed = "8"
 mime_guess = "2"
 

@@ -15,6 +15,12 @@ function shortModel(model: string): string {
         .replace(/-\d{8}$/, '');
 }
 
+function formatTokens(n: number): string {
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+    return n.toLocaleString();
+}
+
 export function RequestTable({ records }: RequestTableProps) {
     const reversed = [...records].reverse();
 
@@ -27,27 +33,25 @@ export function RequestTable({ records }: RequestTableProps) {
                         <th>MODEL</th>
                         <th>INPUT</th>
                         <th>OUTPUT</th>
-                        <th>CACHE W</th>
-                        <th>CACHE R</th>
+                        <th>TOTAL</th>
                         <th>COST</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {reversed.map((record, i) => (
-                        <tr key={`${record.timestamp}-${i}`}>
-                            <td>{formatTimestamp(record.timestamp)}</td>
-                            <td>{shortModel(record.model)}</td>
-                            <td>{record.input_tokens.toLocaleString()}</td>
-                            <td>{record.output_tokens.toLocaleString()}</td>
-                            <td>
-                                {record.cache_creation_input_tokens.toLocaleString()}
-                            </td>
-                            <td>
-                                {record.cache_read_input_tokens.toLocaleString()}
-                            </td>
-                            <td>${record.cost_usd.toFixed(4)}</td>
-                        </tr>
-                    ))}
+                    {reversed.map((record, i) => {
+                        const total = record.input_tokens + record.output_tokens +
+                            record.cache_read_input_tokens + record.cache_creation_input_tokens;
+                        return (
+                            <tr key={`${record.timestamp}-${i}`}>
+                                <td>{formatTimestamp(record.timestamp)}</td>
+                                <td>{shortModel(record.model)}</td>
+                                <td>{formatTokens(record.input_tokens)}</td>
+                                <td>{formatTokens(record.output_tokens)}</td>
+                                <td>{formatTokens(total)}</td>
+                                <td>${record.cost_usd.toFixed(4)}</td>
+                            </tr>
+                        );
+                    })}
                 </tbody>
             </table>
         </div>

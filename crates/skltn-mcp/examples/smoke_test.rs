@@ -39,6 +39,7 @@ fn main() {
         "crates/skltn-core/src/options.rs",
         &tokenizer,
         &tracker,
+        &None,
     );
     println!("{}\n", result);
     assert!(
@@ -54,6 +55,7 @@ fn main() {
         "crates/skltn-mcp/src/resolve.rs",
         &tokenizer,
         &tracker,
+        &None,
     );
     let first_line = result.lines().next().unwrap_or("");
     println!("{}", first_line);
@@ -72,6 +74,7 @@ fn main() {
         "resolve_safe_path",
         None,
         &tokenizer,
+        &None,
     );
     let first_line = result.lines().next().unwrap_or("");
     println!("{}", first_line);
@@ -93,6 +96,7 @@ fn main() {
         "MatchInfo",
         None,
         &tokenizer,
+        &None,
     );
     let first_line = result.lines().next().unwrap_or("");
     println!("{}", first_line);
@@ -110,6 +114,7 @@ fn main() {
         "backend_for_extension",
         None,
         &tokenizer,
+        &None,
     );
     let first_line = result.lines().next().unwrap_or("");
     println!("{}", first_line);
@@ -126,6 +131,7 @@ fn main() {
         "nonexistent.rs",
         &tokenizer,
         &tracker,
+        &None,
     );
     println!("{}", result);
     assert!(
@@ -137,7 +143,7 @@ fn main() {
     // --- Test 10: Error - unsupported language ---
     println!("--- TEST 10: Error - unsupported language ---");
     let result =
-        skltn_mcp::tools::read_skeleton::read_skeleton_or_full(&root, "CLAUDE.md", &tokenizer, &tracker);
+        skltn_mcp::tools::read_skeleton::read_skeleton_or_full(&root, "CLAUDE.md", &tokenizer, &tracker, &None);
     println!("{}", result);
     assert!(
         result.contains("Unsupported language"),
@@ -152,6 +158,7 @@ fn main() {
         "../../../etc/passwd",
         &tokenizer,
         &tracker,
+        &None,
     );
     println!("{}", result);
     assert!(
@@ -168,6 +175,7 @@ fn main() {
         "nonexistent_xyz",
         None,
         &tokenizer,
+        &None,
     );
     println!("{}", result);
     assert!(result.contains("not found"), "Should report symbol not found");
@@ -185,6 +193,7 @@ fn main() {
         target_file,
         &tokenizer,
         &cache_tracker,
+        &None,
     );
     let first_header = first_read.lines().next().unwrap_or("");
     println!("1st read: {}", first_header);
@@ -209,6 +218,7 @@ fn main() {
         target_file,
         &tokenizer,
         &cache_tracker,
+        &None,
     );
     let second_header = second_read.lines().next().unwrap_or("");
     println!("2nd read: {}", second_header);

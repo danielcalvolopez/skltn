@@ -1,7 +1,9 @@
 use axum::routing::get;
 use axum::Router;
 use futures::StreamExt;
+use skltn_obs::drilldown::DrilldownTracker;
 use skltn_obs::proxy::AppState;
+use skltn_obs::savings::SavingsTracker;
 use skltn_obs::tracker::{CostTracker, UsageRecord};
 use skltn_obs::ws::ws_handler;
 use std::net::SocketAddr;
@@ -21,20 +23,25 @@ fn sample_record(model: &str, input: usize, output: usize) -> UsageRecord {
     }
 }
 
-fn make_app_state(tracker: CostTracker) -> AppState {
+async fn make_app_state(tracker: CostTracker) -> AppState {
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let savings_tracker = SavingsTracker::new(dir.path().to_path_buf()).await;
+    let drilldown_tracker = DrilldownTracker::new(dir.path().to_path_buf()).await;
     AppState {
         client,
         upstream: "http://unused".to_string(),
         tracker,
+        savings_tracker,
+        drilldown_tracker,
     }
 }
 
 async fn start_ws_server(tracker: CostTracker) -> SocketAddr {
-    let state = make_app_state(tracker);
+    let state = make_app_state(tracker).await;
     let app = Router::new()
         .route("/ws", get(ws_handler))
         .with_state(state);
@@ -62,11 +69,13 @@ async fn test_ws_replay_existing_records() {
 
     let msg1 = ws.next().await.unwrap().unwrap();
     let record1: serde_json::Value = serde_json::from_str(&msg1.into_text().unwrap()).unwrap();
-    assert_eq!(record1["model"], "model-a");
+    assert_eq!(record1["type"], "usage");
+    assert_eq!(record1["data"]["model"], "model-a");
 
     let msg2 = ws.next().await.unwrap().unwrap();
     let record2: serde_json::Value = serde_json::from_str(&msg2.into_text().unwrap()).unwrap();
-    assert_eq!(record2["model"], "model-b");
+    assert_eq!(record2["type"], "usage");
+    assert_eq!(record2["data"]["model"], "model-b");
 }
 
 #[tokio::test]
@@ -85,8 +94,9 @@ async fn test_ws_live_records() {
 
     let msg = ws.next().await.unwrap().unwrap();
     let record: serde_json::Value = serde_json::from_str(&msg.into_text().unwrap()).unwrap();
-    assert_eq!(record["model"], "model-live");
-    assert_eq!(record["input_tokens"], 300);
+    assert_eq!(record["type"], "usage");
+    assert_eq!(record["data"]["model"], "model-live");
+    assert_eq!(record["data"]["input_tokens"], 300);
 }
 
 #[tokio::test]
@@ -107,11 +117,11 @@ async fn test_ws_multiple_clients() {
 
     let msg1 = ws1.next().await.unwrap().unwrap();
     let r1: serde_json::Value = serde_json::from_str(&msg1.into_text().unwrap()).unwrap();
-    assert_eq!(r1["model"], "model-broadcast");
+    assert_eq!(r1["data"]["model"], "model-broadcast");
 
     let msg2 = ws2.next().await.unwrap().unwrap();
     let r2: serde_json::Value = serde_json::from_str(&msg2.into_text().unwrap()).unwrap();
-    assert_eq!(r2["model"], "model-broadcast");
+    assert_eq!(r2["data"]["model"], "model-broadcast");
 }
 
 #[tokio::test]
@@ -126,11 +136,11 @@ async fn test_ws_replay_then_live() {
 
     let msg1 = ws.next().await.unwrap().unwrap();
     let r1: serde_json::Value = serde_json::from_str(&msg1.into_text().unwrap()).unwrap();
-    assert_eq!(r1["model"], "model-before");
+    assert_eq!(r1["data"]["model"], "model-before");
 
     tracker.record(sample_record("model-after", 200, 100)).await;
 
     let msg2 = ws.next().await.unwrap().unwrap();
     let r2: serde_json::Value = serde_json::from_str(&msg2.into_text().unwrap()).unwrap();
-    assert_eq!(r2["model"], "model-after");
+    assert_eq!(r2["data"]["model"], "model-after");
 }

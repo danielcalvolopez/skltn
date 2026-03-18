@@ -6,6 +6,12 @@ High-performance Rust toolchain for AI context window optimization via AST-based
 
 Minimize token usage. Keep responses concise and direct. Prefer editing over rewriting files. Use parallel tool calls. Avoid restating context or repeating file contents unnecessarily.
 
+Ignore these folders and files
+.docs
+.PRD
+.PROGRESS
+OPTIMISATIONS
+
 ## Rust Style
 
 - Idiomatic Rust; follow clippy suggestions.
