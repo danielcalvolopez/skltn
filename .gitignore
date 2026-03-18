@@ -16,6 +16,8 @@
 .docs
 .superpowers
 OPTIMISATIONS_V2.md
+.PRD.md
+.PROGRESS.md
 
 # Sensitive
 .env.local
