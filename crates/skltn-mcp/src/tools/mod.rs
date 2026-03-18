@@ -29,7 +29,9 @@ pub fn language_name(ext: &str) -> &'static str {
         "rs" => "rust",
         "py" => "python",
         "ts" => "typescript",
+        "tsx" => "tsx",
         "js" => "javascript",
+        "jsx" => "jsx",
         _ => "unknown",
     }
 }
@@ -132,10 +134,10 @@ impl SkltnServer {
 #[tool_router]
 impl SkltnServer {
     /// List the repository file structure as a tree. Shows supported source
-    /// files (.rs, .py, .ts, .js) with byte sizes and detected languages.
+    /// files (.rs, .py, .ts, .tsx, .js, .jsx) with byte sizes and detected languages.
     #[tool(
         name = "list_repo_structure",
-        description = "List the repository file structure as a tree. Shows supported source files (.rs, .py, .ts, .js) with byte sizes and detected languages."
+        description = "List the repository file structure as a tree. Shows supported source files (.rs, .py, .ts, .tsx, .js, .jsx) with byte sizes and detected languages."
     )]
     async fn list_repo_structure(
         &self,

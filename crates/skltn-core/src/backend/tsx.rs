@@ -3,19 +3,20 @@ use tree_sitter::{Language, Node};
 use super::js_common;
 use super::LanguageBackend;
 
-pub struct JavaScriptBackend;
+pub struct TsxBackend;
 
-impl LanguageBackend for JavaScriptBackend {
+impl LanguageBackend for TsxBackend {
     fn language(&self) -> Language {
-        tree_sitter_javascript::LANGUAGE.into()
+        tree_sitter_typescript::LANGUAGE_TSX.into()
     }
 
     fn extensions(&self) -> &[&str] {
-        &["js", "jsx"]
+        &["tsx"]
     }
 
     fn is_structural_node(&self, node: &Node) -> bool {
         js_common::is_structural_node_common(node)
+            || matches!(node.kind(), "abstract_class_declaration")
     }
 
     fn is_doc_comment(&self, node: &Node, source: &[u8]) -> bool {
@@ -23,7 +24,10 @@ impl LanguageBackend for JavaScriptBackend {
     }
 
     fn body_node<'a>(&self, node: &Node<'a>) -> Option<Node<'a>> {
-        js_common::body_node_common(node)
+        match node.kind() {
+            "abstract_class_declaration" => None,
+            _ => js_common::body_node_common(node),
+        }
     }
 
     fn placeholder(&self) -> &str {
